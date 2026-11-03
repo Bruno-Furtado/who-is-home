@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#080c15">
+<title>who-is-home</title>
+<link rel="icon" href="/icon.svg">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <a class="brand" href="/">
+      <span class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></span>
+      <span data-i18n="dev.back"></span>
+    </a>
+    <div class="top-r">
+      <div class="menu-wrap">
+        <button class="icon-btn" id="lang" aria-haspopup="menu" aria-expanded="false"></button>
+        <div class="menu" id="lang-menu" role="menu"></div>
+      </div>
+      <div class="menu-wrap">
+        <button class="icon-btn" id="theme" aria-haspopup="menu" aria-expanded="false"></button>
+        <div class="menu" id="theme-menu" role="menu"></div>
+      </div>
+    </div>
+  </header>
+
+  <div class="card dhead" id="dhead">
+    <span class="dev-ic big-ic" id="d-ic"></span>
+    <div class="dhead-main">
+      <div class="dname"><h1 id="d-name">…</h1><button class="btn small" id="edit" data-i18n="edit.button"></button></div>
+      <div class="chips-row" id="d-chips"></div>
+      <form class="edit" id="edit-form" hidden>
+        <label><span data-i18n="edit.name"></span><input id="e-name" maxlength="40" autocomplete="off"></label>
+        <label><span data-i18n="edit.kind"></span><select id="e-kind"></select></label>
+        <button class="btn primary" type="submit" data-i18n="edit.save"></button>
+        <button class="btn" type="button" id="e-cancel" data-i18n="edit.cancel"></button>
+        <span class="res" id="e-res"></span>
+      </form>
+    </div>
+  </div>
+
+  <section>
+    <div class="sec-h">
+      <div><h2 data-i18n="d.summary"></h2><p id="d-desc">&nbsp;</p></div>
+      <div class="seg" id="period-seg">
+        <button data-v="today" data-i18n="p.today"></button><button data-v="7d" data-i18n="p.7d"></button><button data-v="30d" data-i18n="p.30d"></button>
+      </div>
+    </div>
+    <div class="kgrid" id="kpis"></div>
+  </section>
+
+  <section>
+    <div class="sec-h">
+      <div><h2 data-i18n="d.timeline"></h2><p data-i18n="d.timelineHint"></p></div>
+      <div class="legend">
+        <span><i class="sq" style="--c:var(--mon)"></i><span data-i18n="leg.online"></span></span>
+        <span><i class="sq" style="--c:var(--accent)"></i><span data-i18n="leg.active"></span></span>
+      </div>
+    </div>
+    <div class="card" id="timeline"></div>
+  </section>
+
+  <section class="grid two">
+    <div class="card"><h3 data-i18n="rep.hours"></h3><p class="hint" data-i18n="d.hoursHint"></p><div id="hours"></div></div>
+    <div class="card"><h3 data-i18n="rep.cats"></h3><p class="hint" data-i18n="rep.catsHint"></p><div id="cats"></div></div>
+  </section>
+
+  <section class="grid two">
+    <div class="card"><h3 data-i18n="rep.sites"></h3><p class="hint" data-i18n="d.sitesHint"></p><div id="sites"></div></div>
+    <div class="card"><h3 data-i18n="rep.blocked"></h3><p class="hint" data-i18n="rep.blockedHint"></p><div id="blocked"></div></div>
+  </section>
+
+  <footer>who-is-home</footer>
+</div>
+
+<script src="/i18n.js"></script>
+<script src="/common.js"></script>
+<script src="/device.js"></script>
+</body>
+</html>

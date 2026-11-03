@@ -1,0 +1,6 @@
+dados/
+__pycache__/
+*.pyc
+.DS_Store
+# anotações locais da rede (nomes e MACs reais)
+aparelhos-da-rede.txt

@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#080c15">
+<title>who-is-home</title>
+<link rel="icon" href="/icon.svg">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="who-is-home">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="brand">
+      <span class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5L12 4l9 7.5"/><path d="M8.5 20v-4.5a3.5 3.5 0 0 1 7 0V20"/><path d="M5.5 9.5V20h13V9.5"/></svg></span>
+      who-is-home
+    </div>
+    <div class="top-r">
+      <button class="icon-btn" id="refresh" data-i18n-title="refresh">
+        <svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.6-6.4L21 8"/><path d="M21 3v5h-5"/></svg>
+      </button>
+      <div class="menu-wrap">
+        <button class="icon-btn" id="lang" aria-haspopup="menu" aria-expanded="false"></button>
+        <div class="menu" id="lang-menu" role="menu"></div>
+      </div>
+      <div class="menu-wrap">
+        <button class="icon-btn" id="theme" aria-haspopup="menu" aria-expanded="false"></button>
+        <div class="menu" id="theme-menu" role="menu"></div>
+      </div>
+    </div>
+  </header>
+
+  <div class="card notice" id="setup" hidden>
+    <span class="gl-ic warn"><svg viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9L2 18a2 2 0 0 0 1.7 3h16.6a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg></span>
+    <div><b id="setup-title"></b><span id="setup-body"></span></div>
+  </div>
+
+  <div class="hero">
+    <div class="card status" id="now-card">
+      <div class="ring"><i></i></div>
+      <div>
+        <div class="st-lbl" data-i18n="now.title"></div>
+        <div class="big" id="now-big">…</div>
+        <div class="st-sub" id="now-sub">&nbsp;</div>
+      </div>
+    </div>
+
+    <div class="card glance">
+      <h3 data-i18n="today.title"></h3>
+      <div class="gl-tiles" id="today-tiles"></div>
+    </div>
+
+    <a class="card net-card" id="net-card" hidden>
+      <span class="gl-ic" id="net-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg></span>
+      <div><h3 data-i18n="net.title"></h3><b id="net-title"></b><small id="net-sub"></small></div>
+    </a>
+  </div>
+
+  <section>
+    <div class="sec-h">
+      <div><h2 data-i18n="dev.title"></h2><p id="dev-desc">&nbsp;</p></div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <div class="seg" id="dev-filter">
+          <button data-v="all" data-i18n="dev.all"></button><button data-v="online" data-i18n="dev.online"></button><button data-v="offline" data-i18n="dev.offline"></button>
+        </div>
+        <select id="dev-sort"><option value="usage" data-i18n="sort.usage"></option><option value="name" data-i18n="sort.name"></option><option value="recent" data-i18n="sort.recent"></option></select>
+      </div>
+    </div>
+    <div class="devices" id="devices"></div>
+  </section>
+
+  <section>
+    <div class="sec-h">
+      <div><h2 data-i18n="rep.title"></h2><p id="rep-desc">&nbsp;</p></div>
+      <div class="seg" id="period-seg">
+        <button data-v="today" data-i18n="p.today"></button><button data-v="7d" data-i18n="p.7d"></button><button data-v="30d" data-i18n="p.30d"></button>
+      </div>
+    </div>
+    <div class="kgrid" id="kpis"></div>
+    <div class="grid two">
+      <div class="card"><h3 data-i18n="rep.usage"></h3><p class="hint" data-i18n="rep.usageHint"></p><div id="usage"></div></div>
+      <div class="card"><h3 data-i18n="rep.cats"></h3><p class="hint" data-i18n="rep.catsHint"></p><div id="cats"></div></div>
+    </div>
+    <div class="card" style="margin-top:16px"><h3 data-i18n="rep.hours"></h3><p class="hint" data-i18n="rep.hoursHint"></p><div id="hours"></div></div>
+    <div class="grid two">
+      <div class="card"><h3 data-i18n="rep.sites"></h3><p class="hint" data-i18n="rep.sitesHint"></p><div id="sites"></div></div>
+      <div class="card"><h3 data-i18n="rep.blocked"></h3><p class="hint" data-i18n="rep.blockedHint"></p><div id="blocked"></div></div>
+    </div>
+    <div class="grid two">
+      <div class="card"><h3 data-i18n="rep.night"></h3><p class="hint" id="night-hint"></p><div id="night"></div></div>
+      <div class="card"><h3 data-i18n="rep.events"></h3><p class="hint" data-i18n="rep.eventsHint"></p><div id="events"></div></div>
+    </div>
+  </section>
+
+  <section class="actions">
+    <div class="card">
+      <h2 style="margin:0;font-size:17px" data-i18n="ntfy.title"></h2>
+      <p id="ntfy-desc"></p>
+      <div class="btns" style="align-items:center"><button class="btn" id="test" data-i18n="ntfy.test"></button><span class="res" id="test-res"></span></div>
+    </div>
+    <div class="card">
+      <h2 style="margin:0;font-size:17px" data-i18n="about.title"></h2>
+      <p data-i18n="about.body"></p>
+    </div>
+  </section>
+
+  <footer id="foot">who-is-home</footer>
+</div>
+
+<script src="/i18n.js"></script>
+<script src="/common.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>
