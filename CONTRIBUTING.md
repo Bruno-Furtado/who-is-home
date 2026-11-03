@@ -17,6 +17,7 @@ Conventional Commits: `<type>(<scope>): <description>`, lowercase, imperative, n
 python3 -m unittest discover -s tests
 python3 -c "import ast; ast.parse(open('who_is_home.py').read(), feature_version=(3, 8))"
 python3 tools/demo.py   # then check http://localhost:8767 on desktop and mobile widths
+node tools/capture.mjs  # with the demo running, if the UI changed (regenerates docs/ images)
 ```
 
 ## Ground rules

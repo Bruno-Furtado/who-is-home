@@ -288,8 +288,11 @@ footer { margin-top: 34px; text-align: center; color: var(--faint); font-size: 1
   .devices { grid-template-columns: minmax(0, 1fr); }
   .kpi b { font-size: 22px; }
   .big { font-size: 32px; }
-  .tl-row { grid-template-columns: 62px minmax(0, 1fr) 54px; gap: 8px; }
+  .tl-row { grid-template-columns: 68px minmax(0, 1fr) 58px; gap: 8px; }
+  .tl-day, .tl-meta { font-size: 12px; white-space: nowrap; }
+  .tl-meta b { margin-right: 0; }
   .tl-meta span { display: none; }
+  .tl-ticks span:nth-child(even) { display: none; }   /* só 0h, 6h, 12h, 18h, 24h: cabe no celular */
   .hbars { gap: 2px; }
   .dhead { gap: 14px; }
   .big-ic { width: 48px; height: 48px; border-radius: 14px; }

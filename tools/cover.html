@@ -1,0 +1,51 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+*{box-sizing:border-box;margin:0}
+body{width:1280px;height:640px;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Helvetica Neue","PingFang SC","Microsoft YaHei",sans-serif;color:#eef1f9;
+ background:radial-gradient(700px 420px at 8% 0%,rgba(91,108,240,.30),transparent 60%),radial-gradient(800px 520px at 100% 100%,rgba(236,72,153,.22),transparent 60%),radial-gradient(600px 400px at 70% 10%,rgba(139,92,246,.26),transparent 60%),#070b14;position:relative}
+body::before{content:"";position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);background-size:40px 40px;mask-image:radial-gradient(circle at 30% 50%,#000,transparent 75%)}
+.l{position:absolute;left:84px;top:0;bottom:0;width:620px;display:flex;flex-direction:column;justify-content:center}
+.brand{display:flex;align-items:center;gap:14px;font-weight:800;font-size:30px;letter-spacing:-.02em}
+.logo{width:52px;height:52px;border-radius:15px;background:linear-gradient(135deg,#5b6cf0,#8b5cf6);display:grid;place-items:center;box-shadow:0 12px 30px -8px #5b6cf0}
+.logo svg{width:30px;height:30px}
+h1{font-size:58px;line-height:1.06;letter-spacing:-.035em;font-weight:800;margin-top:34px}
+h1 em{font-style:normal;background:linear-gradient(90deg,#818cf8,#c084fc 55%,#f472b6);-webkit-background-clip:text;background-clip:text;color:transparent}
+p{font-size:20px;line-height:1.45;color:#a3acc2;margin-top:20px;max-width:560px}
+.chips{display:flex;flex-wrap:wrap;gap:10px;margin-top:28px;max-width:580px}
+.chip{display:inline-flex;align-items:center;gap:8px;padding:9px 15px;border-radius:999px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);font-size:15px;color:#dfe4f2}
+.chip i{width:8px;height:8px;border-radius:50%;background:var(--c)}
+.pulse{display:flex;align-items:center;gap:10px;font-size:15px;color:#7d879f;margin-top:30px}
+.pulse b{width:10px;height:10px;border-radius:50%;background:#12b76a;box-shadow:0 0 0 5px rgba(18,183,106,.2),0 0 18px #12b76a}
+.phone{position:absolute;width:262px;border-radius:40px;padding:9px;background:#0d1220;border:1px solid rgba(255,255,255,.14);box-shadow:0 40px 80px -30px rgba(0,0,0,.85),0 0 0 1px rgba(0,0,0,.4)}
+.phone img{display:block;width:100%;border-radius:32px}
+.p1{right:300px;top:70px;transform:rotate(-6deg)}
+.p2{right:70px;top:40px;transform:rotate(5deg)}
+</style></head><body>
+<div class="l">
+  <div class="brand"><span class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5L12 4l9 7.5"/><path d="M8.5 20v-4.5a3.5 3.5 0 0 1 7 0V20"/><path d="M5.5 9.5V20h13V9.5"/></svg></span>who-is-home</div>
+  <h1 id="h1"></h1>
+  <p id="p"></p>
+  <div class="chips" id="chips"></div>
+  <div class="pulse"><b></b>macOS · AdGuard Home · Python 3.8+</div>
+</div>
+<div class="phone p1"><img src="mobile-light.png"></div>
+<div class="phone p2"><img src="mobile-dark.png"></div>
+<script>
+// Capa de cada idioma (tools/capture.mjs abre cover.html?lang=en|pt|zh).
+const T = {
+  en: { h1: "Who's on your <em>Wi-Fi?</em><br>And for how long.",
+        p: "Every device at home, how long each one is used and which sites it visits. Runs next to AdGuard Home, with zero dependencies.",
+        chips: ["Live devices", "Time in use", "Sites & categories", "Late-night use", "Phone alerts"] },
+  pt: { h1: "Quem está <em>no Wi-Fi?</em><br>E por quanto tempo.",
+        p: "Cada aparelho da casa, quanto tempo fica em uso e quais sites acessa. Roda junto do AdGuard Home, sem nenhuma dependência.",
+        chips: ["Aparelhos ao vivo", "Tempo de uso", "Sites e categorias", "Uso de madrugada", "Avisos no celular"] },
+  zh: { h1: "谁在用<em>Wi-Fi？</em><br>用了多久？",
+        p: "家里的每台设备、各自使用多久、访问了哪些网站。与 AdGuard Home 一起运行，零依赖。",
+        chips: ["实时设备", "使用时长", "网站与类别", "深夜使用", "手机通知"] },
+};
+const t = T[new URLSearchParams(location.search).get("lang")] || T.en;
+const colors = ["#12b76a", "#5b6cf0", "#ec4899", "#8b5cf6", "#f79009"];
+document.getElementById("h1").innerHTML = t.h1;
+document.getElementById("p").textContent = t.p;
+document.getElementById("chips").innerHTML = t.chips.map((c, i) => `<span class="chip"><i style="--c:${colors[i]}"></i>${c}</span>`).join("");
+</script>
+</body></html>

@@ -47,6 +47,9 @@ static/style.css      styles; light/dark tokens on :root (same look as down-agai
 tests/                parsers, translations, static files, statistics
 tools/demo.py         demo server with 7 days of simulated data (temp dir, port 8767)
 tools/icons.py        regenerates static/icon.svg and the PNG icons
+tools/capture.mjs     regenerates docs/<lang>/ images (cover, screenshots, GIF) via headless Chrome + ffmpeg
+tools/cover.html      cover template (one per language via ?lang=)
+docs/<lang>/          README images per language: cover.png, demo.gif, dashboard.png, device.png
 ```
 
 ## Commands
@@ -56,6 +59,7 @@ python3 who_is_home.py                   # collector + dashboard on :8080 (uses 
 python3 who_is_home.py setup | check | install | uninstall
 python3 -m unittest discover -s tests
 python3 tools/demo.py                    # http://localhost:8767, simulated data
+node tools/capture.mjs                   # regenerate docs/<lang>/ images (demo must be running; LANGS=en to limit)
 ```
 
 `WHOISHOME_DATA=/some/dir` moves the data folder (the demo and tests use it).
@@ -64,4 +68,5 @@ python3 tools/demo.py                    # http://localhost:8767, simulated data
 
 - Code comments are in **Brazilian Portuguese**.
 - Keep `who_is_home.py` a single file, in section order: utilities → network → domains → AdGuard → notifier → collector → statistics → web server → commands.
-- New config keys go in `DEFAULTS` with a short comment and in the README table.
+- New config keys go in `DEFAULTS` with a short comment.
+- READMEs are short and exist in three languages, each with its own images in `docs/<lang>/`. If the UI changes in a visible way, regenerate them with `node tools/capture.mjs`.

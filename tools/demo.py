@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Painel de demonstração com 7 dias de dados simulados (pasta temporária, nunca toca em dados/).
-Não varre a rede, não lê o AdGuard e não manda avisos.
+Não varre a rede, não lê o AdGuard, não fala com o down-again e não manda avisos.
 
     python3 tools/demo.py            → http://localhost:8767
 """
@@ -52,7 +52,7 @@ def fill(db):
                 e = min(base + b * 3600 + rnd.randint(-900, 900), now)
                 if s >= now:
                     continue
-                db.execute("INSERT INTO presence(mac, start_ts, end_ts) VALUES(?,?,?)", (mac, s - 600, e + 600))
+                db.execute("INSERT INTO presence(mac, start_ts, end_ts) VALUES(?,?,?)", (mac, s - 600, min(e + 600, now)))
                 t = s
                 while t < e:
                     burst = rnd.randint(3, 12)
@@ -64,19 +64,30 @@ def fill(db):
             if not hours:      # impressora: fica ligada o dia todo, só tráfego de sistema
                 db.execute("INSERT INTO presence(mac, start_ts, end_ts) VALUES(?,?,?)", (mac, base, min(base + 86400, now)))
     wh.ingest(db, entries, 2)
-    for mac, ip, host, nick, kind, hours, sites in DEVICES:
+    hour = time.localtime(now).tm_hour
+    for i, (mac, ip, host, nick, kind, hours, sites) in enumerate(DEVICES):
         last = db.execute("SELECT MAX(COALESCE(end_ts, 0)) FROM presence WHERE mac=?", (mac,)).fetchone()[0] or start
-        online = 1 if rnd.random() < 0.6 or kind == "printer" else 0
+        # online: impressora, quem está no horário de uso agora e metade dos outros (a lista fica variada)
+        online = 1 if kind == "printer" or any(a <= hour < b for a, b in hours) or i % 2 == 0 else 0
         db.execute("UPDATE devices SET last_seen=?, online=? WHERE mac=?", (now if online else last, online, mac))
         if online:
-            db.execute("UPDATE presence SET end_ts=NULL WHERE id=(SELECT MAX(id) FROM presence WHERE mac=?)", (mac,))
+            db.execute("UPDATE presence SET end_ts=NULL WHERE id=(SELECT id FROM presence WHERE mac=? "
+                       "ORDER BY start_ts DESC LIMIT 1)", (mac,))
     db.execute("INSERT INTO events(ts, kind, mac, detail) VALUES(?,?,?,?)", (now - 2 * 86400, "new", DEVICES[4][0], DEVICES[4][1]))
     db.commit()
 
 
+def fake_internet(cfg):
+    """Cartão da internet sem precisar do down-again rodando."""
+    now = time.time()
+    return {"enabled": True, "ok": True, "state": "up", "since": now - 9 * 3600, "h24": {"count": 1, "down_s": 92},
+            "d7": {"count": 3, "down_s": 610}, "port": None, "speed": {"ts": now - 3600, "down": 512.4, "up": 248.9}}
+
+
 def main():
     cfg = wh.load_config()
-    cfg.update(port=PORT, down_again_url="", ntfy_topic="")
+    cfg.update(port=PORT, ntfy_topic="")
+    wh.internet_status = fake_internet
     db = wh.connect()
     fill(db)
     db.close()
