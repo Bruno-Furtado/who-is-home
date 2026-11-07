@@ -74,7 +74,8 @@ const I18N = {
     "todo.noKind": "No type ({n})", "todo.noPeople": "Add the people who live here", "todo.addPeople": "Add", "pp.empty": "No people yet.",
     "pp.athome": "home", "pp.away": "away", "pp.apps": "Apps", "dev.noName": "no name", "set.look": "Appearance", "set.about": "This dashboard",
     "set.version": "Version", "set.address": "Address", "set.adguard": "AdGuard Home", "now.lblPeople": "people at home now",
-    "todo.bar": "{n} devices need a name, an owner or a type", "todo.go": "Organize →", "dev.groupNone": "No owner", "dev.groupInfra": "Infrastructure"
+    "todo.bar": "{n} devices need a name, an owner or a type", "todo.go": "Organize →", "dev.groupNone": "No owner", "dev.groupInfra": "Infrastructure",
+    "pr.when": "When they were online", "pr.legHome": "at home", "pr.notFound": "Person not found"
   },
   "pt": {
     "unit.d": "d", "unit.h": "h", "unit.min": "min", "lang": "Idioma", "theme": "Tema", "refresh": "Atualizar agora", "theme.hour": "Pelo horário",
@@ -151,7 +152,8 @@ const I18N = {
     "todo.noPeople": "Cadastre quem mora na casa", "todo.addPeople": "Cadastrar", "pp.empty": "Nenhuma pessoa ainda.", "pp.athome": "em casa",
     "pp.away": "fora", "pp.apps": "Apps", "dev.noName": "sem nome", "set.look": "Aparência", "set.about": "Este painel", "set.version": "Versão",
     "set.address": "Endereço", "set.adguard": "AdGuard Home", "now.lblPeople": "pessoas em casa agora", "todo.bar": "{n} aparelhos sem nome, dono ou tipo",
-    "todo.go": "Organizar →", "dev.groupNone": "Sem dono", "dev.groupInfra": "Infraestrutura"
+    "todo.go": "Organizar →", "dev.groupNone": "Sem dono", "dev.groupInfra": "Infraestrutura", "pr.when": "Quando esteve em uso",
+    "pr.legHome": "em casa", "pr.notFound": "Pessoa não encontrada"
   },
   "zh": {
     "unit.d": "天", "unit.h": "小时", "unit.min": "分钟", "lang": "语言", "theme": "主题", "refresh": "立即刷新", "theme.hour": "按时间", "theme.hourHint": "{a} 点到 {b} 点为深色",
@@ -207,6 +209,7 @@ const I18N = {
     "todo.title": "待整理", "todo.noName": "未命名（{n}）", "todo.noOwner": "未指定成员（{n}）", "todo.noKind": "未设类型（{n}）", "todo.noPeople": "添加家庭成员",
     "todo.addPeople": "添加", "pp.empty": "还没有成员。", "pp.athome": "在家", "pp.away": "外出", "pp.apps": "应用", "dev.noName": "未命名", "set.look": "外观",
     "set.about": "关于本面板", "set.version": "版本", "set.address": "地址", "set.adguard": "AdGuard Home", "now.lblPeople": "位成员正在家中",
-    "todo.bar": "{n} 台设备缺少名称、成员或类型", "todo.go": "去整理 →", "dev.groupNone": "未指定成员", "dev.groupInfra": "基础设施"
+    "todo.bar": "{n} 台设备缺少名称、成员或类型", "todo.go": "去整理 →", "dev.groupNone": "未指定成员", "dev.groupInfra": "基础设施", "pr.when": "使用时段",
+    "pr.legHome": "在家", "pr.notFound": "未找到该成员"
   }
 };

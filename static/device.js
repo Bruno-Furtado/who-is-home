@@ -41,18 +41,6 @@ $("#d-members").addEventListener("click", async (e) => {
   load();
 });
 
-function timelineHTML(days, now) {
-  const ticks = [0, 3, 6, 9, 12, 15, 18, 21, 24].map((h) => `<span style="left:${(h / 24) * 100}%">${h}h</span>`).join("");
-  const rows = days.slice().reverse().map((d) => {
-    const span = d.end - d.start, P = (x) => ((x - d.start) / span) * 100;
-    let segs = d.online.map(([a, b]) => `<i class="s-mon" style="left:${P(a)}%;width:${Math.max(0.3, P(b) - P(a))}%" data-tip="${esc(t("d.onlineTip", { a: WH.time(a), b: WH.time(b), dur: WH.secs(b - a) }))}"></i>`).join("");
-    segs += d.active.map(([a, b]) => `<i class="s-act" style="left:${P(a)}%;width:${Math.max(0.25, P(b) - P(a))}%" data-tip="${esc(t("d.activeTip", { a: WH.time(a), b: WH.time(b), dur: mins((b - a) / 60) }))}"></i>`).join("");
-    if (now < d.end) segs += `<i class="s-fut" style="left:${P(Math.max(now, d.start))}%;right:0"></i>`;
-    return `<div class="tl-row"><div class="tl-day">${esc(WH.dayLabel(d.start))}</div><div class="tl-track">${segs}</div>
-      <div class="tl-meta"><b>${mins(d.minutes)}</b><span>${esc(WH.secs(d.online_s))}</span></div></div>`;
-  }).join("");
-  return `<div class="tl"><div class="tl-row tl-axis"><div></div><div class="tl-ticks">${ticks}</div><div class="tl-meta"><span>${esc(t("d.tlHeader"))}</span></div></div>${rows}</div>`;
-}
 
 function domainTable(rows, field) {
   if (!rows.length) return `<div class="empty">${esc(t(field === "blocked" ? "rep.blockedNone" : "empty.period"))}</div>`;
@@ -76,7 +64,7 @@ function render(x) {
     [t("kpi.blocked"), num(tot.blocked), t("kpi.blockedSub", { p: WH.pct(tot.blocked, tot.queries) }), "var(--down)"],
   ];
   $("#kpis").innerHTML = kpis.map(([l, v, s, c]) => `<div class="card kpi" data-tip="${esc(s)}"><h3><i style="--c:${c}"></i>${esc(l)}</h3><b>${v}</b></div>`).join("");
-  $("#timeline").innerHTML = timelineHTML(x.days, x.now);
+  $("#timeline").innerHTML = WH.timelineHTML(x.days, x.now);
   $("#hours").innerHTML = WH.hoursHTML(x.hours);
   $("#cats").innerHTML = WH.catsHTML(x.categories);
   const byMin = x.apps.some((a) => a.minutes);

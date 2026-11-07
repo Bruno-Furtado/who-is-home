@@ -80,12 +80,15 @@ function renderNow(n, today, p) {
   // últimas 24h: trechos em que alguém estava usando
   const d = n.day, span = d.to - d.from, P = (x) => ((x - d.from) / span) * 100;
   setHTML($("#day-sum"), `<b>${esc(t("now.day"))}</b><span>${esc(t("now.daySub", { time: mins(d.busy_minutes) }))}</span>`);
-  // trechos com menos de 10 min de intervalo viram um só (a faixa fica legível, sem cara de código de barras)
-  const spans = [];
-  for (const [a, b] of d.active) {
-    if (spans.length && a - spans[spans.length - 1][1] < 600) spans[spans.length - 1][1] = b; else spans.push([a, b]);
-  }
-  setHTML($("#day-track"), spans.map(([a, b]) => `<i class="s-act" style="left:${P(a)}%;width:${Math.max(0.3, P(b) - P(a))}%"></i>`).join(""));
+  const segs = (list) => WH.mergeSpans(list, 600).map(([a, b]) =>
+    `<i class="s-act" style="left:${P(a)}%;width:${Math.max(0.3, P(b) - P(a))}%" data-tip="${esc(WH.time(a) + " – " + WH.time(b))}"></i>`).join("");
+  // com pessoas cadastradas: uma faixa por pessoa (quando cada um esteve em uso); senão, a da casa
+  const rows = (d.people || []).filter((x) => x.minutes);
+  $("#day-track").hidden = rows.length > 0;
+  setHTML($("#day-track"), rows.length ? "" : segs(d.active));
+  setHTML($("#day-people"), rows.map((x) => `<a class="day-row" href="/person?id=${x.id}">
+    <span class="who">${WH.avatar(x.name, "sm")}<b>${esc(x.name)}</b></span>
+    <span class="day-track">${segs(x.active)}</span><span class="day-min">${mins(x.minutes)}</span></a>`).join(""));
   const ticks = [0, 0.25, 0.5, 0.75].map((f) => WH.time(d.from + span * f));
   setHTML($("#day-ticks"), ticks.map((x) => `<span>${x}</span>`).join("") + `<span>${esc(t("now.nowTick"))}</span>`);
 }
@@ -168,7 +171,7 @@ function personCard(p, days) {
   ];
   if (apps) facts.push([t("pp.apps"), apps]);
   return `<div class="card person">
-    <div class="p-head">${WH.avatar(p.name)}<b>${esc(p.name)}</b>
+    <div class="p-head">${WH.avatar(p.name)}<b><a href="/person?id=${p.id}">${esc(p.name)}</a></b>
       <button class="icon-btn sm" data-edit="${p.id}" title="${esc(t("pp.edit"))}" aria-label="${esc(t("pp.edit"))}">${PENCIL}</button></div>
     <div class="p-num">${mins(p.minutes)}${days > 1 && p.days_active ? `<small>${esc(t("pp.perDay", { v: mins(p.per_day) }))}</small>` : ""}</div>
     ${WH.catStrip(p.categories)}

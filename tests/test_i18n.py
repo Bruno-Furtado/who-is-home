@@ -51,9 +51,9 @@ class UiTest(ParityMixin, unittest.TestCase):
     def test_used_keys_exist(self):
         keys = set(ui_dict()["en"])
         used = set()
-        for name in ("index.html", "device.html", "wrapped.html"):
+        for name in ("index.html", "device.html", "wrapped.html", "person.html"):
             used |= set(re.findall(r'data-i18n(?:-html|-title)?="([^"]+)"', read(name)))
-        for name in ("app.js", "device.js", "common.js", "wrapped.js"):
+        for name in ("app.js", "device.js", "common.js", "wrapped.js", "person.js"):
             used |= set(re.findall(r'\bt\("([^"]+)"', read(name)))
         missing = {k for k in used if k not in keys and not k.endswith(".")}
         self.assertEqual(missing, set())

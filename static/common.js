@@ -175,6 +175,30 @@ const WH = (() => {
   const cat = (c) => ({ code: c || "other", label: t("cat." + (CAT_COLORS[c] ? c : "other")), color: CAT_COLORS[c] || CAT_COLORS.other });
   const catChip = (c) => { const x = cat(c); return `<span class="cat" style="--c:${x.color}"><i></i>${esc(x.label)}</span>`; };
 
+  // Junta trechos com menos de `gap` segundos entre si (as faixas ficam legíveis, sem cara de código de barras).
+  function mergeSpans(list, gap) {
+    const out = [];
+    for (const [a, b] of list) {
+      if (out.length && a - out[out.length - 1][1] < gap) out[out.length - 1][1] = Math.max(out[out.length - 1][1], b);
+      else out.push([a, b]);
+    }
+    return out;
+  }
+
+  // Dia a dia: uma faixa de 24h por dia (mais recente primeiro). Verde = na rede / em casa; azul = em uso.
+  function timelineHTML(days, now) {
+    const ticks = [0, 3, 6, 9, 12, 15, 18, 21, 24].map((h) => `<span style="left:${(h / 24) * 100}%">${h}h</span>`).join("");
+    const rows = days.slice().reverse().map((d) => {
+      const span = d.end - d.start, P = (x) => ((x - d.start) / span) * 100;
+      let segs = d.online.map(([a, b]) => `<i class="s-mon" style="left:${P(a)}%;width:${Math.max(0.3, P(b) - P(a))}%" data-tip="${esc(t("d.onlineTip", { a: time(a), b: time(b), dur: secs(b - a) }))}"></i>`).join("");
+      segs += mergeSpans(d.active, 300).map(([a, b]) => `<i class="s-act" style="left:${P(a)}%;width:${Math.max(0.25, P(b) - P(a))}%" data-tip="${esc(t("d.activeTip", { a: time(a), b: time(b), dur: mins((b - a) / 60) }))}"></i>`).join("");
+      if (now < d.end) segs += `<i class="s-fut" style="left:${P(Math.max(now, d.start))}%;right:0"></i>`;
+      return `<div class="tl-row"><div class="tl-day">${esc(dayLabel(d.start))}</div><div class="tl-track">${segs}</div>
+        <div class="tl-meta"><b>${mins(d.minutes)}</b><span>${esc(secs(d.online_s))}</span></div></div>`;
+    }).join("");
+    return `<div class="tl"><div class="tl-row tl-axis"><div></div><div class="tl-ticks">${ticks}</div><div class="tl-meta"><span>${esc(t("d.tlHeader"))}</span></div></div>${rows}</div>`;
+  }
+
   // Barras por hora (24 colunas), valores em minutos de uso.
   function hoursHTML(hours) {
     const max = Math.max(1, ...hours);
@@ -268,5 +292,5 @@ const WH = (() => {
 
   return { lang, locale, t, $, store, applyStatic, mountLangSeg, mountThemeSeg, markTab, mins, secs, ago, time, dayLabel, date, dt,
     num, pct, esc, get, post, kindIcon, cat, catChip, hoursHTML, barsHTML, catsHTML, initTips, seg, pad, avatar, titleChip,
-    catStrip, hourLabel, KINDS: Object.keys(KIND_ICONS) };
+    catStrip, hourLabel, mergeSpans, timelineHTML, KINDS: Object.keys(KIND_ICONS) };
 })();
