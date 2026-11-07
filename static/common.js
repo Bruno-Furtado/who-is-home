@@ -64,68 +64,51 @@ const WH = (() => {
     });
   }
 
-  function closeMenus(except) { document.querySelectorAll(".menu.on").forEach((m) => m !== except && m.classList.remove("on")); }
+  /* ---------- tema e idioma (escolhidos em Ajustes, valem para todas as páginas) ---------- */
+  const DARK_FROM = 18, DARK_TO = 6;   // "pelo horário": escuro das 18h às 6h (igual ao down-again)
+  let theme = store.get("theme", "hour");
+  function applyTheme() {
+    let th = theme;
+    if (th === "hour") { const h = new Date().getHours(); th = h >= DARK_FROM || h < DARK_TO ? "dark" : "light"; }
+    if (th === "system") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = th;
+    const shown = th === "system" ? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : th;
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.content = shown === "dark" ? "#0b0b0e" : "#f2f3f6";
+  }
+  applyTheme();
+  setInterval(applyTheme, 60000);
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyTheme);
 
-  // Botão + menu de idioma; trocar recarrega a página (todos os textos e formatos mudam juntos).
-  function mountLangMenu(btn, menu) {
-    btn.innerHTML = flag(lang);
-    btn.title = t("lang");
-    btn.setAttribute("aria-label", t("lang"));
-    menu.innerHTML = LANGS.map((l) => `<button role="menuitemradio" aria-checked="${l.code === lang}" data-v="${l.code}" class="${l.code === lang ? "on" : ""}">` +
-      `${flag(l.code)}<span>${l.name}</span><span>${l.code === lang ? "✓" : ""}</span></button>`).join("");
-    const toggle = (open) => { menu.classList.toggle("on", open); btn.setAttribute("aria-expanded", open); };
-    btn.addEventListener("click", (e) => { e.stopPropagation(); closeMenus(menu); toggle(!menu.classList.contains("on")); });
-    menu.addEventListener("click", (e) => {
+  function mountThemeSeg(el, hint) {
+    const THEMES = [["hour", t("theme.hour")], ["system", t("theme.system")], ["light", t("theme.light")], ["dark", t("theme.dark")]];
+    const draw = () => {
+      el.innerHTML = THEMES.map(([k, l]) => `<button data-v="${k}" class="${k === theme ? "on" : ""}">${l}</button>`).join("");
+      hint.textContent = theme === "hour" ? t("theme.hourHint", { a: DARK_FROM, b: DARK_TO }) : theme === "system" ? t("theme.systemHint") : "";
+    };
+    el.addEventListener("click", (e) => {
       const b = e.target.closest("button");
       if (!b) return;
-      if (b.dataset.v !== lang) { store.set("lang", b.dataset.v); location.reload(); } else toggle(false);
+      theme = b.dataset.v; store.set("theme", theme); applyTheme(); draw();
     });
-    document.addEventListener("click", () => toggle(false));
-    document.addEventListener("keydown", (e) => { if (e.key === "Escape") toggle(false); });
+    draw();
   }
 
-  /* ---------- tema (igual ao down-again: escuro à noite por padrão) ---------- */
-  const DARK_FROM = 19, DARK_TO = 7;
-  const THEME_ICONS = {
-    hour: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
-    system: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
-    light: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
-    dark: '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>',
-  };
-  const svgIcon = (k) => `<svg viewBox="0 0 24 24">${THEME_ICONS[k]}</svg>`;
-  function mountThemeMenu(btn, menu) {
-    const THEMES = [
-      ["hour", t("theme.hour"), t("theme.hourHint", { a: DARK_FROM, b: DARK_TO })],
-      ["system", t("theme.system"), t("theme.systemHint")],
-      ["light", t("theme.light"), ""],
-      ["dark", t("theme.dark"), ""],
-    ];
-    let theme = store.get("theme", "hour");
-    function apply() {
-      let th = theme;
-      if (th === "hour") { const h = new Date().getHours(); th = h >= DARK_FROM || h < DARK_TO ? "dark" : "light"; }
-      if (th === "system") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = th;
-      const shown = th === "system" ? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : th;
-      btn.innerHTML = svgIcon(theme === "hour" || theme === "system" ? theme : shown);
-      btn.title = t("theme");
-      btn.setAttribute("aria-label", t("theme"));
-      const meta = document.querySelector('meta[name="theme-color"]');
-      if (meta) meta.content = shown === "dark" ? "#080c15" : "#f2f4f9";
-      menu.innerHTML = THEMES.map(([k, l, h]) =>
-        `<button role="menuitemradio" aria-checked="${k === theme}" data-v="${k}" class="${k === theme ? "on" : ""}">${svgIcon(k)}<span>${l}${h ? `<small>${h}</small>` : ""}</span><span>${k === theme ? "✓" : ""}</span></button>`).join("");
-    }
-    const toggle = (open) => { menu.classList.toggle("on", open); btn.setAttribute("aria-expanded", open); };
-    btn.addEventListener("click", (e) => { e.stopPropagation(); closeMenus(menu); toggle(!menu.classList.contains("on")); });
-    menu.addEventListener("click", (e) => {
+  // Idioma: trocar recarrega a página (todos os textos e formatos mudam juntos).
+  function mountLangSeg(el) {
+    el.innerHTML = LANGS.map((l) => `<button data-v="${l.code}" class="${l.code === lang ? "on" : ""}">${flag(l.code)}${l.name}</button>`).join("");
+    el.addEventListener("click", (e) => {
       const b = e.target.closest("button");
-      if (!b) return;
-      theme = b.dataset.v; store.set("theme", theme); apply(); toggle(false);
+      if (b && b.dataset.v !== lang) { store.set("lang", b.dataset.v); location.reload(); }
     });
-    document.addEventListener("click", () => toggle(false));
-    document.addEventListener("keydown", (e) => { if (e.key === "Escape") toggle(false); });
-    matchMedia("(prefers-color-scheme: dark)").addEventListener("change", apply);
-    apply();
-    setInterval(apply, 60000);
+  }
+
+  // Abas: na página principal mostram/escondem as vistas; nas outras páginas são links e só marcam a aba atual.
+  function markTab(tab) {
+    document.querySelectorAll("#tabs a").forEach((a) => {
+      const on = a.dataset.tab === tab;
+      a.classList.toggle("on", on);
+      a.setAttribute("aria-selected", on);
+    });
   }
 
   /* ---------- formatação ---------- */
@@ -283,7 +266,7 @@ const WH = (() => {
   }
   const hourLabel = (h) => (h == null ? "—" : pad(h) + "h");
 
-  return { lang, locale, t, $, store, applyStatic, mountLangMenu, mountThemeMenu, mins, secs, ago, time, dayLabel, date, dt,
+  return { lang, locale, t, $, store, applyStatic, mountLangSeg, mountThemeSeg, markTab, mins, secs, ago, time, dayLabel, date, dt,
     num, pct, esc, get, post, kindIcon, cat, catChip, hoursHTML, barsHTML, catsHTML, initTips, seg, pad, avatar, titleChip,
     catStrip, hourLabel, KINDS: Object.keys(KIND_ICONS) };
 })();

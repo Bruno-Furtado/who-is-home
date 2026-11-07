@@ -2,15 +2,14 @@
 // Wrapped: o mês da casa em números grandes, recordes e um cartão por pessoa.
 const { t, $, esc, mins, num } = WH;
 WH.applyStatic();
-WH.mountLangMenu($("#lang"), $("#lang-menu"));
-WH.mountThemeMenu($("#theme"), $("#theme-menu"));
+WH.markTab("people");
 WH.initTips();
 
 let month = new URLSearchParams(location.search).get("month") || "";
 const F_MONTH = new Intl.DateTimeFormat(WH.locale, { month: "long", year: "numeric" });
 const F_DAY = new Intl.DateTimeFormat(WH.locale, { weekday: "long", day: "numeric" });
 const hours = (m) => Math.round(m / 60);
-const card = (inner, cls = "", color = "") => `<div class="card wr-card ${cls}"${color ? ` style="--g1:${color}"` : ""}>${inner}</div>`;
+const card = (inner, cls = "", color = "") => `<div class="card wr-card ${cls}"${color ? ` style="--sc:${color}"` : ""}>${inner}</div>`;
 const k = (key, vars) => `<div class="wr-k">${esc(t(key, vars))}</div>`;
 
 function shift(m, delta) {

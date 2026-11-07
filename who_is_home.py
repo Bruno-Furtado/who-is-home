@@ -1707,6 +1707,125 @@ def overview(db, key, cfg):
             "new_devices": new_devices, "events": events}
 
 
+def house_day(db, now=None):
+    """Últimas 24h da casa: trechos em que algum aparelho estava em uso e o total de minutos (somando aparelhos)."""
+    now = now or time.time()
+    model = Model(db)
+    act = activity_by(db, model, int((now - 86400) // 60))
+    union = sorted({m for mins in act.values() for m in mins})
+    return {"from": now - 86400, "to": now, "active": merge_minutes(union),
+            "minutes": sum(len(m) for m in act.values()), "busy_minutes": len(union)}
+
+
+ARRIVAL_GAP = 20 * 60       # celular que some do Wi-Fi por menos que isso não "saiu" (relógio e celular dormem)
+
+
+def recent_activity(db, hours=48, limit=14):
+    """Extrato: quem chegou e saiu de casa e os aparelhos novos, do mais recente. A presença de cada pessoa junta
+    o celular e o relógio dela (o relógio sozinho desliga o Wi-Fi a toda hora); sem dono, vale o próprio aparelho."""
+    now = time.time()
+    t0 = now - hours * 3600
+    model = Model(db)
+    groups = {}
+    for c in model.groups:
+        d = model.devs[c]
+        if d["hidden"] or d["kind"] not in ("phone", "watch"):
+            continue
+        key = ("p", d["person_id"]) if d["person_id"] in model.people else ("d", c)
+        groups.setdefault(key, []).append(c)
+    rows = []
+    for (kind, ref), mains in groups.items():
+        members = model.macs(mains)
+        sess = []
+        for s, e, mm in db.execute("SELECT start_ts, end_ts, mac FROM presence WHERE mac IN (%s) AND COALESCE(end_ts, ?) > ?"
+                                   % marks(members), members + [now, t0 - 86400]).fetchall():
+            sess.append((s, e if e is not None else (now if model.devs[mm]["online"] else (model.devs[mm]["last_seen"] or s))))
+        merged = []
+        for a, b in sorted(sess):
+            if merged and a - merged[-1][1] <= ARRIVAL_GAP:
+                merged[-1][1] = max(merged[-1][1], b)
+            else:
+                merged.append([a, b])
+        phone = next((c for c in mains if model.devs[c]["kind"] == "phone"), mains[0])
+        who = model.people[ref] if kind == "p" else name_of(model.devs[ref])
+        firsts = [model.devs[m]["first_seen"] for m in members if model.devs[m]["first_seen"]]
+        online = any(model.devs[m]["online"] for m in members)
+        for i, (a, b) in enumerate(merged):
+            first_time = firsts and abs(a - min(firsts)) < 120                 # isso é "aparelho novo", não chegada
+            if a >= t0 and not first_time:
+                rows.append({"kind": "arrive", "ts": a, "name": who, "device": name_of(model.devs[phone]), "mac": phone,
+                             "secs": a - merged[i - 1][1] if i > 0 else None})
+            if b >= t0 and not (online and i == len(merged) - 1):
+                rows.append({"kind": "leave", "ts": b, "name": who, "device": name_of(model.devs[phone]), "mac": phone,
+                             "secs": b - a})
+    for ts, mac, detail in db.execute("SELECT ts, mac, detail FROM events WHERE kind='new' AND ts >= ?", (t0,)).fetchall():
+        m = model.main(mac)
+        if m and not m["hidden"]:
+            rows.append({"kind": "new", "ts": ts, "name": name_of(m), "device": detail or "", "mac": model.canon.get(mac, mac),
+                         "secs": None})
+    rows.sort(key=lambda r: -r["ts"])
+    return rows[:limit]
+
+
+def insights(db, cfg, now=None):
+    """O dia em frases curtas (o painel monta o texto no idioma de quem vê) e o que falta organizar."""
+    now = now or time.time()
+    model = Model(db)
+    t0, t1, days = period_range("today", now)
+    people, unassigned = people_summary(db, model, t0, t1, days, cfg)
+    out = []
+    active = sorted((p for p in people if p["minutes"]), key=lambda p: -p["minutes"])
+    if active:
+        top = active[0]
+        cat = top["categories"][0]["cat"] if top["categories"] else None
+        out.append({"code": "top", "name": top["name"], "time": top["minutes"], "cat": cat})
+    for p in sorted(active, key=lambda p: -p["work_minutes"]):
+        if p["work_minutes"] >= 30:
+            out.append({"code": "work", "name": p["name"], "time": p["work_minutes"], "start": p["work_start"]})
+            break
+    for p in sorted(active, key=lambda p: -p["cat_minutes"].get("social", 0)):
+        if p["cat_minutes"].get("social", 0) >= 30:
+            out.append({"code": "social", "name": p["name"], "time": p["cat_minutes"]["social"]})
+            break
+    for p in sorted(active, key=lambda p: -p["night_minutes"]):
+        if p["night_minutes"] >= 15:
+            out.append({"code": "night", "name": p["name"], "time": p["night_minutes"]})
+            break
+    # a casa: comparado com ontem até a mesma hora
+    act = activity_by(db, model, int((t0 - 86400) // 60))
+    today = sum(1 for mins in act.values() for m in mins if t0 <= m * 60 < now)
+    yesterday = sum(1 for mins in act.values() for m in mins if t0 - 86400 <= m * 60 < now - 86400)
+    pct = int(round(100.0 * (today - yesterday) / yesterday)) if yesterday >= 30 else 0
+    if today and abs(pct) >= 5:                  # "0% a mais que ontem" não diz nada
+        out.append({"code": "vs", "pct": pct, "time": today})
+    hours = Counter(datetime.fromtimestamp(m * 60).hour for mins in act.values() for m in mins if t0 <= m * 60 < now)
+    if hours:
+        h, n = hours.most_common(1)[0]
+        if n >= 15:
+            out.append({"code": "peak", "hour": h})
+    macs = [m for m in model.devs if model.counted(m)]
+    apps = top_apps(db, macs, days, [v for mins in act.values() for m, v in mins.items() if t0 <= m * 60 < now], limit=1)
+    if apps and (apps[0]["minutes"] or apps[0]["queries"]):
+        out.append({"code": "app", "app": apps[0]["app"]})
+    q, b = query_totals(db, macs, days)
+    if b:
+        out.append({"code": "blocked", "n": b, "pct": int(round(100.0 * b / q)) if q else 0})
+    # o que falta organizar (só aparelhos que contam: infraestrutura fica de fora)
+    todo = {"no_name": [], "no_owner": [], "no_kind": []}
+    for c in model.groups:
+        d = model.devs[c]
+        if d["hidden"]:
+            continue
+        item = {"mac": c, "name": name_of(d), "kind": d["kind"], "ip": d["ip"]}
+        if not d["nickname"]:
+            todo["no_name"].append(item)
+        if model.people and d["person_id"] not in model.people:
+            todo["no_owner"].append(item)
+        if not d["kind"]:
+            todo["no_kind"].append(item)
+    return {"now": now, "facts": out, "todo": todo, "people": len(model.people)}
+
+
 def device_detail(db, mac, key, cfg):
     model = Model(db)
     if mac not in model.devs:
@@ -1771,10 +1890,10 @@ def wrapped(db, month, cfg):
             house[(c, minute)] = v
     by_day, hours, cats = Counter(), [0] * 24, Counter()
     for (c, minute), (cat, app) in house.items():
-        t = datetime.fromtimestamp(minute * 60)
-        by_day[t.strftime("%Y-%m-%d")] += 1
-        hours[t.hour] += 1
+        hours[datetime.fromtimestamp(minute * 60).hour] += 1
         cats[cat] += 1
+    for minute in {m for _, m in house}:       # dia mais conectado: horas em que alguém estava usando (sem somar aparelhos)
+        by_day[datetime.fromtimestamp(minute * 60).strftime("%Y-%m-%d")] += 1
     q, b = query_totals(db, macs, days)
     sites = db.execute("SELECT COUNT(DISTINCT domain) FROM domains WHERE day IN (%s) AND mac IN (%s)"
                        % (marks(days), marks(macs)), days + macs).fetchone()[0] if macs else 0
@@ -1834,6 +1953,7 @@ STATIC_FILES = {
     "/device.js": ("device.js", "application/javascript; charset=utf-8"),
     "/wrapped": ("wrapped.html", "text/html; charset=utf-8"),
     "/wrapped.js": ("wrapped.js", "application/javascript; charset=utf-8"),
+    "/fonts/app.woff2": ("fonts/app.woff2", "font/woff2"),        # Geist, a mesma fonte do down-again (licença em fonts/OFL.txt)
     "/i18n.js": ("i18n.js", "application/javascript; charset=utf-8"),
     "/manifest.webmanifest": ("manifest.webmanifest", "application/manifest+json; charset=utf-8"),
     "/icon.svg": ("icon.svg", "image/svg+xml"),
@@ -2010,9 +2130,13 @@ class Handler(BaseHTTPRequestHandler):
             db = connect()
             try:
                 if u.path == "/api/now":
-                    devs = devices_list(db, self.cfg)
+                    devs = [d for d in devices_list(db, self.cfg) if not d["hidden"]]
                     return self.json({"now": time.time(), "online": sum(1 for d in devs if d["online"]),
-                                      "total": len(devs), "status": self.collector_status()})
+                                      "total": len(devs), "status": self.collector_status(), "day": house_day(db)})
+                if u.path == "/api/activity":
+                    return self.json(recent_activity(db))
+                if u.path == "/api/insights":
+                    return self.json(insights(db, self.cfg))
                 if u.path == "/api/devices":
                     return self.json(devices_list(db, self.cfg))
                 if u.path == "/api/overview":

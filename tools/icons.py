@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Gera os ícones do app (static/icon.svg e os PNGs) sem dependências: o desenho é a casinha do logo
-sobre o degradê do painel, rasterizada por distância até os traços (bordas suavizadas).
+Gera os ícones do app (static/icon.svg e os PNGs) sem dependências: a casinha violeta sobre o grafite
+(o mesmo fundo do ícone do down-again), rasterizada por distância até os traços (bordas suavizadas).
 
     python3 tools/icons.py
 """
@@ -13,7 +13,8 @@ import zlib
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 STATIC = os.path.join(ROOT, "static")
-C1, C2 = (0x5b, 0x6c, 0xf0), (0x8b, 0x5c, 0xf6)     # --accent e --accent-2
+C1, C2 = (0x3b, 0x34, 0x70), (0x17, 0x18, 0x1d)     # brilho violeta no canto → grafite (igual ao logo do painel)
+INK = (0xa7, 0x8b, 0xfa)                             # casinha
 
 # casinha numa grade 24x24 (igual ao SVG do logo)
 ROOF = [(3, 11.5), (12, 4), (21, 11.5)]
@@ -54,11 +55,11 @@ def render(size):
             cx = min(max(px, radius), size - radius)
             cy = min(max(py, radius), size - radius)
             edge = max(0.0, min(1.0, radius - math.hypot(px - cx, py - cy) + 0.5))
-            k = (x + y) / (2.0 * size)
+            k = min(1.0, math.hypot(px, py) / (0.95 * size))         # degradê radial a partir do canto de cima
             bg = [C1[i] + (C2[i] - C1[i]) * k for i in range(3)]
             d = min(dist(px, py, a, b) for a, b in segs)
             ink = max(0.0, min(1.0, half - d + 0.5))
-            rgb = [int(round(c + (255 - c) * ink)) for c in bg]
+            rgb = [int(round(c + (INK[i] - c) * ink)) for i, c in enumerate(bg)]
             row += bytes(rgb + [int(round(255 * edge))])
         rows.append(bytes(row))
     return rows
@@ -74,9 +75,9 @@ def png(rows, size):
 def main():
     s = 64 * 0.62 / 24
     svg = ('<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><defs>'
-           '<linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5b6cf0"/>'
-           '<stop offset="1" stop-color="#8b5cf6"/></linearGradient></defs><rect width="64" height="64" rx="14.4" fill="url(#g)"/>'
-           '<path transform="translate(%.2f %.2f) scale(%.4f)" d="%s" fill="none" stroke="#fff" stroke-width="%.1f" '
+           '<radialGradient id="g" cx="0" cy="0" r="1.2"><stop offset="0" stop-color="#3b3470"/>'
+           '<stop offset=".7" stop-color="#17181d"/></radialGradient></defs><rect width="64" height="64" rx="14.4" fill="url(#g)"/>'
+           '<path transform="translate(%.2f %.2f) scale(%.4f)" d="%s" fill="none" stroke="#a78bfa" stroke-width="%.1f" '
            'stroke-linecap="round" stroke-linejoin="round"/></svg>\n') % ((64 - 24 * s) / 2, (64 - 24 * s) / 2, s, SVG_PATH, STROKE)
     with open(os.path.join(STATIC, "icon.svg"), "w") as f:
         f.write(svg)

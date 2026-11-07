@@ -2,8 +2,7 @@
 // Página de um aparelho: presença, uso, horários, categorias e sites.
 const { t, $, esc, mins, num } = WH;
 WH.applyStatic();
-WH.mountLangMenu($("#lang"), $("#lang-menu"));
-WH.mountThemeMenu($("#theme"), $("#theme-menu"));
+WH.markTab("devices");
 WH.initTips();
 
 const mac = new URLSearchParams(location.search).get("mac") || "";
@@ -33,7 +32,7 @@ function renderHead(d) {
   const box = $("#d-members");
   box.hidden = !d.members.length;
   box.innerHTML = d.members.map((m) => `<span class="chip-s mono">${m.online ? '<span class="dot on"></span>' : ""}${esc(m.mac)} · ${esc(m.ip || "")}
-    <button class="btn small" data-split="${esc(m.mac)}">${esc(t("d.split"))}</button></span>`).join("");
+    <button class="btn sm" data-split="${esc(m.mac)}">${esc(t("d.split"))}</button></span>`).join("");
 }
 $("#d-members").addEventListener("click", async (e) => {
   const b = e.target.closest("[data-split]");
@@ -76,7 +75,7 @@ function render(x) {
     [t("kpi.queries"), num(tot.queries), t("d.queriesSub"), "var(--accent-2)"],
     [t("kpi.blocked"), num(tot.blocked), t("kpi.blockedSub", { p: WH.pct(tot.blocked, tot.queries) }), "var(--down)"],
   ];
-  $("#kpis").innerHTML = kpis.map(([l, v, s, c]) => `<div class="card kpi"><h3><i style="--c:${c}"></i>${esc(l)}</h3><b>${v}</b><small>${esc(s)}</small></div>`).join("");
+  $("#kpis").innerHTML = kpis.map(([l, v, s, c]) => `<div class="card kpi" data-tip="${esc(s)}"><h3><i style="--c:${c}"></i>${esc(l)}</h3><b>${v}</b></div>`).join("");
   $("#timeline").innerHTML = timelineHTML(x.days, x.now);
   $("#hours").innerHTML = WH.hoursHTML(x.hours);
   $("#cats").innerHTML = WH.catsHTML(x.categories);

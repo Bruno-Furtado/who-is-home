@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#080c15">
+<meta name="theme-color" content="#0b0b0e">
 <title>who-is-home</title>
 <link rel="icon" href="/icon.svg">
 <link rel="manifest" href="/manifest.webmanifest">
@@ -16,39 +16,37 @@
 
   <header class="top">
     <a class="brand" href="/">
-      <span class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></span>
-      <span data-i18n="dev.back"></span>
+      <span class="logo"><svg viewBox="0 0 24 24" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5L12 4l9 7.5"/><path d="M8.5 20v-4.5a3.5 3.5 0 0 1 7 0V20"/><path d="M5.5 9.5V20h13V9.5"/></svg></span>
+      <span>who-is-home</span>
     </a>
-    <div class="top-r">
-      <div class="menu-wrap">
-        <button class="icon-btn" id="lang" aria-haspopup="menu" aria-expanded="false"></button>
-        <div class="menu" id="lang-menu" role="menu"></div>
-      </div>
-      <div class="menu-wrap">
-        <button class="icon-btn" id="theme" aria-haspopup="menu" aria-expanded="false"></button>
-        <div class="menu" id="theme-menu" role="menu"></div>
-      </div>
-    </div>
+    <nav class="tabs" id="tabs" role="tablist">
+      <a href="/#now" data-tab="now" role="tab"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.5"/><path d="M8.5 8.5a5 5 0 0 0 0 7M15.5 8.5a5 5 0 0 1 0 7M5.6 5.6a9 9 0 0 0 0 12.8M18.4 5.6a9 9 0 0 1 0 12.8"/></svg><span data-i18n="tab.now"></span></a>
+      <a href="/#people" data-tab="people" role="tab"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M21.5 20a6.5 6.5 0 0 0-4-6"/></svg><span data-i18n="tab.people"></span></a>
+      <a href="/#devices" data-tab="devices" role="tab"><svg viewBox="0 0 24 24"><rect x="2.5" y="5" width="13" height="9.5" rx="1.5"/><path d="M1 18h16"/><rect x="17.5" y="8" width="5" height="11.5" rx="1.3"/></svg><span data-i18n="tab.devices"></span></a>
+      <a href="/#report" data-tab="report" role="tab"><svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v15H6z"/><path d="M14 2v6h6M9 13h7M9 17h7"/></svg><span data-i18n="tab.report"></span></a>
+      <a href="/#settings" data-tab="settings" role="tab"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg><span data-i18n="tab.settings"></span></a>
+    </nav>
+    <div class="top-r"></div>
   </header>
 
-  <div class="card dhead" id="dhead">
-    <span class="dev-ic big-ic" id="d-ic"></span>
-    <div class="dhead-main">
-      <div class="dname"><h1 id="d-name">…</h1><button class="btn small" id="edit" data-i18n="edit.button"></button></div>
-      <div class="chips-row" id="d-chips"></div>
-      <div class="members" id="d-members" hidden></div>
-      <form class="edit" id="edit-form" hidden>
-        <label><span data-i18n="edit.name"></span><input id="e-name" maxlength="40" autocomplete="off"></label>
-        <label><span data-i18n="edit.kind"></span><select id="e-kind"></select></label>
-        <label><span data-i18n="edit.person"></span><select id="e-person"></select></label>
-        <label id="e-new-wrap" hidden><span data-i18n="pp.name"></span><input id="e-new" maxlength="30" autocomplete="off"></label>
-        <label><span data-i18n="edit.join"></span><select id="e-join"></select></label>
-        <label class="check"><input type="checkbox" id="e-hidden"><span data-i18n="edit.infra"></span></label>
-        <button class="btn primary" type="submit" data-i18n="edit.save"></button>
-        <button class="btn" type="button" id="e-cancel" data-i18n="edit.cancel"></button>
-        <span class="res" id="e-res"></span>
-      </form>
+  <div class="card" id="dhead">
+    <div class="dhead">
+      <span class="dev-ic" id="d-ic"></span>
+      <div class="dhead-main">
+        <div class="dname"><h1 id="d-name">…</h1><button class="btn sm" id="edit" data-i18n="edit.button"></button></div>
+        <div class="chips-row" id="d-chips"></div>
+        <div class="members" id="d-members" hidden></div>
+      </div>
     </div>
+    <form class="edit" id="edit-form" hidden>
+      <label><span data-i18n="edit.name"></span><input id="e-name" maxlength="40" autocomplete="off"></label>
+      <label><span data-i18n="edit.kind"></span><select id="e-kind"></select></label>
+      <label><span data-i18n="edit.person"></span><select id="e-person"></select></label>
+      <label id="e-new-wrap" hidden><span data-i18n="pp.name"></span><input id="e-new" maxlength="30" autocomplete="off"></label>
+      <label><span data-i18n="edit.join"></span><select id="e-join"></select></label>
+      <label class="check"><span data-i18n="edit.infra"></span><input type="checkbox" id="e-hidden"></label>
+      <div class="btns"><button class="btn primary" type="submit" data-i18n="edit.save"></button><button class="btn" type="button" id="e-cancel" data-i18n="edit.cancel"></button><span class="res" id="e-res"></span></div>
+    </form>
   </div>
 
   <section>
@@ -58,12 +56,12 @@
         <button data-v="today" data-i18n="p.today"></button><button data-v="7d" data-i18n="p.7d"></button><button data-v="30d" data-i18n="p.30d"></button>
       </div>
     </div>
-    <div class="kgrid" id="kpis"></div>
+    <div class="kpis" id="kpis"></div>
   </section>
 
   <section>
     <div class="sec-h">
-      <div><h2 data-i18n="d.timeline"></h2><p data-i18n="d.timelineHint"></p></div>
+      <div><h2 data-i18n="d.timeline"></h2></div>
       <div class="legend">
         <span><i class="sq" style="--c:var(--mon)"></i><span data-i18n="leg.online"></span></span>
         <span><i class="sq" style="--c:var(--accent)"></i><span data-i18n="leg.active"></span></span>
@@ -72,18 +70,15 @@
     <div class="card" id="timeline"></div>
   </section>
 
-  <section class="grid two">
+  <div class="grid2">
     <div class="card"><h3 data-i18n="rep.hours"></h3><div id="hours"></div></div>
     <div class="card"><h3 data-i18n="rep.cats"></h3><div id="cats"></div></div>
-  </section>
-
-  <section class="grid two">
+  </div>
+  <div class="grid2">
     <div class="card"><h3 data-i18n="rep.apps"></h3><div id="apps"></div></div>
     <div class="card"><h3 data-i18n="rep.sites"></h3><div id="sites"></div></div>
-  </section>
-  <section>
-    <div class="card"><h3 data-i18n="rep.blocked"></h3><div id="blocked"></div></div>
-  </section>
+  </div>
+  <div class="card full"><h3 data-i18n="rep.blocked"></h3><div id="blocked"></div></div>
 
   <footer>who-is-home</footer>
 </div>
