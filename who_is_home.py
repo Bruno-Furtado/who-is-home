@@ -44,7 +44,7 @@ from urllib.parse import parse_qs, urlencode, urlparse
 from urllib.request import Request, urlopen
 from xml.sax.saxutils import escape as xml_escape
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 BASE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.abspath(os.environ.get("WHOISHOME_DATA") or os.path.join(BASE, "dados"))   # WHOISHOME_DATA: usado pelo tools/demo.py
 STATIC = os.path.join(BASE, "static")
