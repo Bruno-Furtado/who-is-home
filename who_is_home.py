@@ -1713,8 +1713,11 @@ def house_day(db, now=None):
     model = Model(db)
     act = activity_by(db, model, int((now - 86400) // 60))
     union = sorted({m for mins in act.values() for m in mins})
+    by_person = activity_by(db, model, int((now - 86400) // 60), by="person")
+    people = [{"id": pid, "name": name, "active": merge_minutes(sorted(by_person.get(pid, {}))),
+               "minutes": len(by_person.get(pid, {}))} for pid, name in model.people.items()]
     return {"from": now - 86400, "to": now, "active": merge_minutes(union),
-            "minutes": sum(len(m) for m in act.values()), "busy_minutes": len(union)}
+            "minutes": sum(len(m) for m in act.values()), "busy_minutes": len(union), "people": people}
 
 
 ARRIVAL_GAP = 20 * 60       # celular que some do Wi-Fi por menos que isso não "saiu" (relógio e celular dormem)
@@ -1871,6 +1874,50 @@ def device_detail(db, mac, key, cfg):
             "candidates": candidates}
 
 
+def person_detail(db, pid, key, cfg):
+    """Página da pessoa: tudo o que os aparelhos dela fizeram, somado sem repetir minutos, e quando ela esteve em casa
+    (pelos celulares e relógios)."""
+    model = Model(db)
+    if pid not in model.people:
+        return None
+    t0, t1, days = period_range(key)
+    now = time.time()
+    people, _ = people_summary(db, model, t0, t1, days, cfg)
+    summary = next(p for p in people if p["id"] == pid)
+    mains = [c for c in model.groups if not model.devs[c]["hidden"] and model.devs[c]["person_id"] == pid]
+    macs = model.macs(mains)
+    mobile = model.macs([c for c in mains if model.devs[c]["kind"] in ("phone", "watch")])
+    sess = []
+    if mobile:
+        for s, e, mm in db.execute("SELECT start_ts, end_ts, mac FROM presence WHERE mac IN (%s) AND COALESCE(end_ts, ?) > ?"
+                                   % marks(mobile), mobile + [now, t0]).fetchall():
+            sess.append((s, e if e is not None else (now if model.devs[mm]["online"] else (model.devs[mm]["last_seen"] or s))))
+    home = []
+    for a, b in sorted(sess):                    # o relógio e o celular dormem: buracos curtos não são "saiu"
+        if home and a - home[-1][1] <= ARRIVAL_GAP:
+            home[-1][1] = max(home[-1][1], b)
+        else:
+            home.append([a, b])
+    mins = activity_by(db, model, int(t0 // 60), by="person").get(pid, {})
+    minutes = sorted(mins)
+    day_rows = []
+    for day in days:
+        ds = datetime.strptime(day, "%Y-%m-%d").timestamp()
+        de = (datetime.strptime(day, "%Y-%m-%d") + timedelta(days=1)).timestamp()
+        on = [[max(s, ds), min(e, de)] for s, e in home if e > ds and s < de]
+        act = [m for m in minutes if ds <= m * 60 < de]
+        day_rows.append({"day": day, "start": ds, "end": de, "online": on, "active": merge_minutes(act),
+                         "minutes": len(act), "online_s": sum(b - a for a, b in on)})
+    q, b = query_totals(db, macs, days)
+    return {"person": {"id": pid, "name": model.people[pid]}, "period": key, "from": t0, "to": t1, "now": now,
+            "summary": summary, "has_home": bool(mobile),
+            "totals": {"minutes": len(minutes), "online_s": sum(r["online_s"] for r in day_rows), "queries": q, "blocked": b},
+            "days": day_rows, "hours": summary["hours"], "categories": summary["categories"],
+            "apps": top_apps(db, macs, days, mins.values(), limit=8),
+            "domains": top_domains(db, model, macs, days, limit=12, exclude=("system", "ads", "other")),
+            "devices": [dict(model.info(c), today_minutes=None) for c in mains]}
+
+
 def device_domains(db, macs, days, limit=40):
     return [{"domain": dm, "cat": c, "queries": q, "blocked": b} for dm, c, q, b in db.execute(
         "SELECT domain, cat, SUM(queries) AS q, SUM(blocked) FROM domains WHERE mac IN (%s) AND day IN (%s) "
@@ -1951,6 +1998,8 @@ STATIC_FILES = {
     "/common.js": ("common.js", "application/javascript; charset=utf-8"),
     "/app.js": ("app.js", "application/javascript; charset=utf-8"),
     "/device.js": ("device.js", "application/javascript; charset=utf-8"),
+    "/person": ("person.html", "text/html; charset=utf-8"),
+    "/person.js": ("person.js", "application/javascript; charset=utf-8"),
     "/wrapped": ("wrapped.html", "text/html; charset=utf-8"),
     "/wrapped.js": ("wrapped.js", "application/javascript; charset=utf-8"),
     "/fonts/app.woff2": ("fonts/app.woff2", "font/woff2"),        # Geist, a mesma fonte do down-again (licença em fonts/OFL.txt)
@@ -2144,6 +2193,13 @@ class Handler(BaseHTTPRequestHandler):
                 if u.path == "/api/device":
                     mac = norm_mac(q.get("mac", [""])[0])
                     detail = device_detail(db, mac, period, self.cfg) if mac else None
+                    return self.json(detail) if detail else self.json({"error": "not found"}, 404)
+                if u.path == "/api/person":
+                    try:
+                        pid = int(q.get("id", ["0"])[0])
+                    except ValueError:
+                        pid = 0
+                    detail = person_detail(db, pid, period, self.cfg) if pid > 0 else None
                     return self.json(detail) if detail else self.json({"error": "not found"}, 404)
                 if u.path == "/api/people":
                     return self.json(people_stats(db, period, self.cfg))

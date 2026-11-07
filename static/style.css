@@ -330,6 +330,17 @@ footer { margin-top: 34px; text-align: center; color: var(--faint); font-size: 1
 .cat i { width: 7px; height: 7px; border-radius: 50%; background: var(--c); }
 .tx-row a, a.tx-row { color: inherit; }
 a.day, a.brand { display: block; color: inherit; }
+/* Agora: uma faixa de 24h por pessoa */
+.day-people { display: grid; gap: 8px; }
+.day-people:empty { display: none; }
+.day-row { display: grid; grid-template-columns: 120px minmax(0, 1fr) 56px; gap: 12px; align-items: center; color: inherit; }
+.day-row .who { font-size: 13.5px; color: var(--text); min-width: 0; }
+.day-row .who b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.day-row .day-track { height: 22px; }
+.day-min { font-size: 13px; font-weight: 650; text-align: right; font-variant-numeric: tabular-nums; }
+.day-people + .day-ticks { margin-left: 132px; margin-right: 68px; }
+.p-head b a { color: inherit; }
+.p-head b a:hover { color: var(--accent); }
 a.brand { display: flex; }
 .tl-track .s-act { top: 6px; bottom: 6px; background: var(--accent); border-radius: 2px; min-width: 2px; }
 .day-track .s-act { background: var(--accent); opacity: .85; border-radius: 2px; min-width: 2px; }
@@ -487,6 +498,9 @@ a.dev:hover { border-color: color-mix(in srgb, var(--accent) 35%, transparent); 
   .grid2 { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 640px) {
+  .day-row { grid-template-columns: 34px minmax(0, 1fr) 50px; gap: 8px; }
+  .day-row .who b { display: none; }
+  .day-people + .day-ticks { margin-left: 42px; margin-right: 58px; }
   .wr-grid { grid-template-columns: minmax(0, 1fr); }
   .wr-big { font-size: 54px; }
   .wr-card { padding: 22px 18px; }
@@ -501,7 +515,7 @@ a.dev:hover { border-color: color-mix(in srgb, var(--accent) 35%, transparent); 
   .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 @media (max-width: 860px) {
-  .now-grid, .two { grid-template-columns: minmax(0, 1fr); }
+  .now-grid, .two, #v-now .now-grid { grid-template-columns: minmax(0, 1fr); }
   .hero-row { flex-direction: column; align-items: stretch; gap: 0; }
   .acts { margin-top: 20px; }
   .chart.mini { height: 120px; }
@@ -518,6 +532,7 @@ a.dev:hover { border-color: color-mix(in srgb, var(--accent) 35%, transparent); 
   .wrap { padding-bottom: calc(40px + var(--tabbar) + env(safe-area-inset-bottom)); }
   .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .kpis .kpi:first-child { grid-column: 1 / -1; }
+  .kpis.even .kpi:first-child { grid-column: auto; }
   #hist-period-slot, #rep-period-slot, .period { width: 100%; }
   .period { align-items: stretch; }
   .period .seg { width: 100%; } .period .seg button { flex: 1; justify-content: center; }
@@ -534,7 +549,8 @@ a.dev:hover { border-color: color-mix(in srgb, var(--accent) 35%, transparent); 
   .path-card { padding: 18px 14px 16px; }
   .node { width: 58px; } .node b { font-size: 12px; } .node .ic { width: 42px; height: 42px; border-radius: 13px; } .link { height: 42px; } .link::before { top: 20px; } .link.bad::after { top: 9px; }
   .kpi b { font-size: 28px; }
-  .tl-row { grid-template-columns: 78px minmax(0, 1fr) 22px; gap: 8px; }
+  .tl-row { grid-template-columns: 70px minmax(0, 1fr) 46px; gap: 8px; }
+  .tl-meta { white-space: nowrap; } .tl-meta b { margin-right: 0; }
   .tl-day { font-size: 12px; white-space: nowrap; }
   .tl-meta span { display: none; }
   .tl-ticks span:nth-child(even) { display: none; }
