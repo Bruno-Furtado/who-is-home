@@ -74,6 +74,16 @@ def fill(db):
             db.execute("UPDATE presence SET end_ts=NULL WHERE id=(SELECT id FROM presence WHERE mac=? "
                        "ORDER BY start_ts DESC LIMIT 1)", (mac,))
     db.execute("INSERT INTO events(ts, kind, mac, detail) VALUES(?,?,?,?)", (now - 2 * 86400, "new", DEVICES[4][0], DEVICES[4][1]))
+    # pessoas, o cabo do MacBook juntado ao Wi-Fi dele e o roteador como infraestrutura
+    ana = wh.update_person(db, {"id": None, "name": "Ana", "delete": False})
+    joao = wh.update_person(db, {"id": None, "name": "João", "delete": False})
+    for i, pid in ((0, ana), (1, ana), (2, joao), (4, joao), (6, ana)):
+        wh.update_device(db, {"mac": DEVICES[i][0], "person_id": pid})
+    db.execute("INSERT INTO devices(mac, ip, hostname, name_source, kind, first_seen, last_seen, online) "
+               "VALUES('3c:22:fb:10:20:99', '192.168.0.31', 'MacBook-Pro', 'mdns', 'computer', ?, ?, 0)", (start, now - 7200))
+    wh.update_device(db, {"mac": "3c:22:fb:10:20:99", "parent": DEVICES[1][0]})
+    db.execute("INSERT INTO devices(mac, ip, nickname, kind, first_seen, last_seen, online, hidden) "
+               "VALUES('06:02:aa:bb:0c:1e', '192.168.0.1', 'Roteador', 'router', ?, ?, 1, 1)", (start - 30 * 86400, now))
     db.commit()
 
 

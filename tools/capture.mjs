@@ -4,7 +4,7 @@
 //   python3 tools/demo.py          # em outro terminal (porta 8767)
 //   node tools/capture.mjs         # tudo; ou: node tools/capture.mjs shots|gif|cover
 //
-// Gera docs/<idioma>/{cover.png, demo.gif, dashboard.png, device.png} para en, pt e zh.
+// Gera docs/<idioma>/{cover.png, demo.gif, dashboard.png, device.png, wrapped.png} para en, pt e zh.
 import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
@@ -50,7 +50,11 @@ await send("Runtime.enable");
 
 const viewport = (width, height, scale, mobile = false) => send("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: scale, mobile });
 async function load(url) {
-  const l = once("Page.loadEventFired");
+  // passar por about:blank garante um carregamento novo (navegar só trocando o "#" não dispara o evento de load)
+  let l = once("Page.loadEventFired");
+  await send("Page.navigate", { url: "about:blank" });
+  await l;
+  l = once("Page.loadEventFired");
   await send("Page.navigate", { url });
   await l;
 }
@@ -82,7 +86,7 @@ for (const lang of LANGS) {
   if (MODE === "all" || MODE === "shots") {
     // painel no desktop, tema escuro
     await viewport(1280, 900, 2);
-    await go(BASE + "/", prefs({ theme: "dark" }));
+    await go(BASE + "/#now", prefs({ theme: "dark" }));
     await shot(path.join(OUT, "dashboard.png"));
 
     // página do aparelho: cabeçalho, resumo e dia a dia
@@ -90,10 +94,15 @@ for (const lang of LANGS) {
     const end = await js(`(() => { const r = document.querySelector("#timeline").getBoundingClientRect(); return r.bottom + scrollY; })()`);
     await shot(path.join(OUT, "device.png"), { x: 0, y: 0, width: 1280, height: Math.ceil(end + 24) });
 
+    // Wrapped do mês: do topo até os recordes
+    await go(BASE + "/wrapped", prefs({ theme: "dark" }));
+    const wEnd = await js(`(() => { const c = [...document.querySelectorAll("#wr .wr-card")]; const r = c[Math.min(c.length, 7) - 1].getBoundingClientRect(); return r.bottom + scrollY; })()`);
+    await shot(path.join(OUT, "wrapped.png"), { x: 0, y: 0, width: 1280, height: Math.ceil(wEnd + 28) });
+
     // celular claro e escuro (usados na capa)
     await viewport(390, 844, 3, true);
     for (const theme of ["light", "dark"]) {
-      await go(BASE + "/", prefs({ theme }));
+      await go(BASE + "/#now", prefs({ theme }));
       await shot(path.join(WORK, `mobile-${lang}-${theme}.png`));
     }
   }
@@ -111,29 +120,39 @@ for (const lang of LANGS) {
       for (let i = 1; i <= steps; i++) { await js(`scrollTo(0, ${Math.round(from + (to - from) * ease(i / steps))})`); await frame(); }
     };
 
+    const tab = async (name, wait = 900) => { await js(`location.hash = "#${name}"`); await sleep(wait); };
     await viewport(390, 844, 2, true);
-    await go(BASE + "/", prefs({ theme: "light" }), 2500);
+    await go(BASE + "/#now", prefs({ theme: "light" }), 2500);
     await js("for (let i = 1; i < 10000; i++) clearInterval(i)");    // sem atualização automática no meio do GIF
-    await hold(10);                                                    // agora + hoje
-    await scroll((await top("#devices")) - 70);
-    await hold(12);                                                    // aparelhos
-    await scroll((await top("#usage")) - 120);
-    await hold(9);                                                     // quem mais usou
+    await hold(12);                                                    // agora
+    await scroll((await top("#facts")) - 90);
+    await hold(12);                                                    // o dia em frases
+    await scroll((await top("#recent")) - 90);
+    await hold(10);                                                    // quem chegou e saiu
+    await tab("people");
+    await hold(14);                                                    // pessoas
+    await tab("devices");
+    await hold(10);                                                    // aparelhos
+    await tab("report");
+    await hold(8);
     await scroll((await top("#cats")) - 120);
-    await hold(8);                                                     // categorias
-    await scroll((await top("#hours")) - 160);
-    await hold(10);                                                    // horários
+    await hold(10);                                                    // categorias
     await load(BASE + DEVICE);                                         // abre um aparelho
     await sleep(1200);
     await js("for (let i = 1; i < 10000; i++) clearInterval(i)");
-    await hold(12);
+    await hold(10);
     await scroll((await top("#timeline")) - 90);
     await hold(12);                                                    // dia a dia
-    await scroll(0, 12);
-    await js(`document.querySelector("#theme").click()`);
-    await hold(6);
-    await js(`document.querySelector('#theme-menu [data-v="dark"]').click()`);
-    await hold(14);
+    await load(BASE + "/wrapped");                                     // a retrospectiva do mês
+    await sleep(1200);
+    await hold(10);
+    await scroll((await top(".wr-person")) - 120);
+    await hold(12);
+    await load(BASE + "/#settings");                                   // tema escuro
+    await sleep(1000);
+    await hold(4);
+    await js(`document.querySelector('#theme-seg [data-v="dark"]').click()`);
+    await hold(12);
     const enc = spawnSync("ffmpeg", ["-v", "error", "-y", "-framerate", "8", "-i", path.join(frames, "f%04d.png"), "-vf",
       "scale=320:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=96:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle",
       path.join(OUT, "demo.gif")], { stdio: "inherit" });

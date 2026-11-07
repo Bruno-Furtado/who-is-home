@@ -23,13 +23,18 @@ class StaticTest(unittest.TestCase):
             self.assertTrue(os.path.isfile(os.path.join(wh.STATIC, name)), "%s → %s" % (path, name))
 
     def test_html_refs_are_served(self):
-        for name in ("index.html", "device.html"):
+        for name in ("index.html", "device.html", "wrapped.html"):
             with open(os.path.join(wh.STATIC, name), encoding="utf-8") as f:
                 html = f.read()
             for ref in re.findall(r'(?:src|href)="(/[^"]*)"', html):
-                self.assertIn(ref, wh.STATIC_FILES, "%s aponta para %s" % (name, ref))
+                self.assertIn(ref.split("#")[0] or "/", wh.STATIC_FILES, "%s aponta para %s" % (name, ref))
             self.assertNotIn("<script>", html, "%s: script inline viola a CSP" % name)
             self.assertNotRegex(html, r"\son[a-z]+=", "%s: evento inline viola a CSP" % name)
+
+    def test_css_refs_are_served(self):
+        with open(os.path.join(wh.STATIC, "style.css"), encoding="utf-8") as f:
+            for ref in re.findall(r"url\((/[^)]+)\)", f.read()):
+                self.assertIn(ref, wh.STATIC_FILES, "style.css aponta para %s" % ref)
 
     def test_manifest(self):
         with open(os.path.join(wh.STATIC, "manifest.webmanifest"), encoding="utf-8") as f:

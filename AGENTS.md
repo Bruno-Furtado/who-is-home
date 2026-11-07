@@ -14,6 +14,12 @@ who-is-home shows who is on a home network, how much each device is used and whi
 2. **HTTP server** (`Handler`): the dashboard (`static/`) and a JSON API on the LAN.
 3. **Notifier**: ntfy alerts through the system `curl`.
 
+Statistics go through `Model`: a device can have several MACs (cable and Wi-Fi, or a rotated private MAC) that point to
+the main one in `devices.parent`, and everything is summed on the main device without counting the same minute twice.
+Devices with `hidden` (routers, switches, this computer) are listed but left out of every total. People (`people`,
+`devices.person_id`) group devices; `people_summary` builds per-person stats and the titles, and `wrapped` builds the
+month in review. `in_use` drops isolated minutes: apps sync by themselves all night, real use comes in runs of minutes.
+
 `ingest` aggregates lookups into `domains` (per day, device and site), `hourly` (per day, device and hour) and `activity` (one row per device-minute "in use"). A minute is "in use" when the device made at least `activity_min_queries` unblocked lookups outside `PASSIVE_CATEGORIES`.
 
 ## Hard constraints
@@ -39,17 +45,19 @@ who-is-home shows who is on a home network, how much each device is used and whi
 
 ```
 who_is_home.py        collector, AdGuard client, names, statistics, HTTP handler, CLI
-static/index.html     dashboard          static/app.js       dashboard logic
+static/index.html     dashboard tabs (Now, People, Devices, Report, Settings)   static/app.js   dashboard logic
 static/device.html    device page        static/device.js    device logic
+static/wrapped.html   month in review    static/wrapped.js   Wrapped logic
 static/common.js      shared helpers (WH.*): i18n, theme, formatting, charts, tooltips
 static/i18n.js        UI strings for en / pt / zh
-static/style.css      styles; light/dark tokens on :root (same look as down-again)
+static/style.css      styles; built from down-again's stylesheet (same tokens, cards, tabs, hero) plus who-is-home parts
+static/fonts/         Geist (app.woff2, OFL), the same self-hosted font as down-again
 tests/                parsers, translations, static files, statistics
 tools/demo.py         demo server with 7 days of simulated data (temp dir, port 8767)
 tools/icons.py        regenerates static/icon.svg and the PNG icons
 tools/capture.mjs     regenerates docs/<lang>/ images (cover, screenshots, GIF) via headless Chrome + ffmpeg
 tools/cover.html      cover template (one per language via ?lang=)
-docs/<lang>/          README images per language: cover.png, demo.gif, dashboard.png, device.png
+docs/<lang>/          README images per language: cover.png, demo.gif, dashboard.png, device.png, wrapped.png
 ```
 
 ## Commands
@@ -69,4 +77,6 @@ node tools/capture.mjs                   # regenerate docs/<lang>/ images (demo 
 - Code comments are in **Brazilian Portuguese**.
 - Keep `who_is_home.py` a single file, in section order: utilities → network → domains → AdGuard → notifier → collector → statistics → web server → commands.
 - New config keys go in `DEFAULTS` with a short comment.
+- **Same look as down-again**: graphite tokens, Geist, tabs on top (bottom bar on phones), bank-app style hero, no
+  continuous animations. When down-again's design changes, bring the shared parts over.
 - READMEs are short and exist in three languages, each with its own images in `docs/<lang>/`. If the UI changes in a visible way, regenerate them with `node tools/capture.mjs`.
