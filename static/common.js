@@ -264,6 +264,26 @@ const WH = (() => {
     });
   }
 
+  /* ---------- pessoas ---------- */
+  // Cor fixa por nome (o mesmo nome tem sempre a mesma cor em qualquer tela).
+  const AVATAR_COLORS = ["#5b6cf0", "#ec4899", "#12b76a", "#f79009", "#8b5cf6", "#06aed4", "#f04438", "#0ba5ec"];
+  function avatar(name, size) {
+    let h = 0;
+    for (const c of String(name || "?")) h = (h * 31 + c.codePointAt(0)) >>> 0;
+    const initial = Array.from(String(name || "?").trim())[0] || "?";
+    return `<span class="avatar${size ? " " + size : ""}" style="--c:${AVATAR_COLORS[h % AVATAR_COLORS.length]}">${esc(initial.toUpperCase())}</span>`;
+  }
+  const TITLE_ICONS = { work: "💼", social: "📱", video: "🎬", games: "🎮", owl: "🦉", early: "🐓", marathon: "🏃", tracked: "🛡️", home: "🏠" };
+  const titleChip = (code) => `<span class="title-chip" data-tip="${esc(t("title." + code + ".hint"))}">${TITLE_ICONS[code] || "⭐"} ${esc(t("title." + code))}</span>`;
+  // Faixa empilhada das categorias (sem legenda: a cor e a dica bastam).
+  function catStrip(cats) {
+    const total = cats.reduce((a, c) => a + c.minutes, 0);
+    if (!total) return `<div class="stack thin"></div>`;
+    return `<div class="stack thin">${cats.map((c) => `<i style="width:${(c.minutes / total) * 100}%;background:${cat(c.cat).color}" data-tip="${esc(cat(c.cat).label + " · " + mins(c.minutes))}"></i>`).join("")}</div>`;
+  }
+  const hourLabel = (h) => (h == null ? "—" : pad(h) + "h");
+
   return { lang, locale, t, $, store, applyStatic, mountLangMenu, mountThemeMenu, mins, secs, ago, time, dayLabel, date, dt,
-    num, pct, esc, get, post, kindIcon, cat, catChip, hoursHTML, barsHTML, catsHTML, initTips, seg, pad, KINDS: Object.keys(KIND_ICONS) };
+    num, pct, esc, get, post, kindIcon, cat, catChip, hoursHTML, barsHTML, catsHTML, initTips, seg, pad, avatar, titleChip,
+    catStrip, hourLabel, KINDS: Object.keys(KIND_ICONS) };
 })();

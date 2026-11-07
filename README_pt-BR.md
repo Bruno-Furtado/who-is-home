@@ -20,6 +20,8 @@ O **who-is-home** mostra cada aparelho da rede de casa, quanto tempo cada um fic
 - 🟢 **Aparelhos ao vivo**: quem está ligado agora, com nomes de verdade e quando cada um foi visto.
 - ⏱️ **Tempo de uso**: por aparelho, por hora e por categoria (redes sociais, vídeo, jogos, trabalho…).
 - 🌐 **Sites**: os mais acessados e os bloqueados, por aparelho.
+- 👥 **Pessoas**: quem mais usa, quem mais trabalha, rotina e títulos divertidos (coruja, madrugador…).
+- 🎁 **Wrapped**: a retrospectiva do mês, com top apps, recordes e um cartão por pessoa.
 - 🌙 **Uso de madrugada** e linha do tempo dia a dia de cada aparelho.
 - 🔔 **Avisos no celular**: aparelho novo na rede e resumo da semana.
 - 🪶 **Zero dependências**: só Python. O painel funciona mesmo com a internet fora.
@@ -31,7 +33,7 @@ O **who-is-home** mostra cada aparelho da rede de casa, quanto tempo cada um fic
     <td width="34%" valign="top"><img src="docs/pt/demo.gif" alt="Painel no celular: aparelhos, relatório e o dia a dia de um aparelho"></td>
     <td valign="top">
       <img src="docs/pt/dashboard.png" alt="Painel no desktop"><br><br>
-      <img src="docs/pt/device.png" alt="Página do aparelho">
+      <img src="docs/pt/wrapped.png" alt="Wrapped: o mês da casa">
     </td>
   </tr>
 </table>

@@ -22,6 +22,9 @@
       who-is-home
     </div>
     <div class="top-r">
+      <a class="icon-btn" href="/wrapped" data-i18n-title="wrapped.open">
+        <svg viewBox="0 0 24 24"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>
+      </a>
       <button class="icon-btn" id="refresh" data-i18n-title="refresh">
         <svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.6-6.4L21 8"/><path d="M21 3v5h-5"/></svg>
       </button>
@@ -64,6 +67,17 @@
 
   <section>
     <div class="sec-h">
+      <div><h2 data-i18n="pp.title"></h2><p id="pp-desc">&nbsp;</p></div>
+      <div class="seg" id="period-seg">
+        <button data-v="today" data-i18n="p.today"></button><button data-v="7d" data-i18n="p.7d"></button><button data-v="30d" data-i18n="p.30d"></button>
+      </div>
+    </div>
+    <div class="people" id="people"></div>
+    <p class="unassigned" id="unassigned" hidden></p>
+  </section>
+
+  <section>
+    <div class="sec-h">
       <div><h2 data-i18n="dev.title"></h2><p id="dev-desc">&nbsp;</p></div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <div class="seg" id="dev-filter">
@@ -78,24 +92,22 @@
   <section>
     <div class="sec-h">
       <div><h2 data-i18n="rep.title"></h2><p id="rep-desc">&nbsp;</p></div>
-      <div class="seg" id="period-seg">
-        <button data-v="today" data-i18n="p.today"></button><button data-v="7d" data-i18n="p.7d"></button><button data-v="30d" data-i18n="p.30d"></button>
-      </div>
     </div>
     <div class="kgrid" id="kpis"></div>
     <div class="grid two">
-      <div class="card"><h3 data-i18n="rep.usage"></h3><p class="hint" data-i18n="rep.usageHint"></p><div id="usage"></div></div>
-      <div class="card"><h3 data-i18n="rep.cats"></h3><p class="hint" data-i18n="rep.catsHint"></p><div id="cats"></div></div>
+      <div class="card"><h3 data-i18n="rep.usage"></h3><div id="usage"></div></div>
+      <div class="card"><h3 data-i18n="rep.cats"></h3><div id="cats"></div></div>
     </div>
-    <div class="card" style="margin-top:16px"><h3 data-i18n="rep.hours"></h3><p class="hint" data-i18n="rep.hoursHint"></p><div id="hours"></div></div>
+    <div class="card" style="margin-top:16px"><h3 data-i18n="rep.hours"></h3><div id="hours"></div></div>
     <div class="grid two">
-      <div class="card"><h3 data-i18n="rep.sites"></h3><p class="hint" data-i18n="rep.sitesHint"></p><div id="sites"></div></div>
-      <div class="card"><h3 data-i18n="rep.blocked"></h3><p class="hint" data-i18n="rep.blockedHint"></p><div id="blocked"></div></div>
+      <div class="card"><h3 data-i18n="rep.apps"></h3><div id="apps"></div></div>
+      <div class="card"><h3 data-i18n="rep.sites"></h3><div id="sites"></div></div>
     </div>
     <div class="grid two">
-      <div class="card"><h3 data-i18n="rep.night"></h3><p class="hint" id="night-hint"></p><div id="night"></div></div>
-      <div class="card"><h3 data-i18n="rep.events"></h3><p class="hint" data-i18n="rep.eventsHint"></p><div id="events"></div></div>
+      <div class="card"><h3 id="night-title"></h3><div id="night"></div></div>
+      <div class="card"><h3 data-i18n="rep.blocked"></h3><div id="blocked"></div></div>
     </div>
+    <div class="card" style="margin-top:16px"><h3 data-i18n="rep.events"></h3><div id="events"></div></div>
   </section>
 
   <section class="actions">

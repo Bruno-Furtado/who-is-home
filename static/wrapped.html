@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#080c15">
+<title>Wrapped · who-is-home</title>
+<link rel="icon" href="/icon.svg">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <a class="brand" href="/">
+      <span class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></span>
+      <span>Wrapped</span>
+    </a>
+    <div class="top-r">
+      <div class="menu-wrap">
+        <button class="icon-btn" id="lang" aria-haspopup="menu" aria-expanded="false"></button>
+        <div class="menu" id="lang-menu" role="menu"></div>
+      </div>
+      <div class="menu-wrap">
+        <button class="icon-btn" id="theme" aria-haspopup="menu" aria-expanded="false"></button>
+        <div class="menu" id="theme-menu" role="menu"></div>
+      </div>
+    </div>
+  </header>
+
+  <div class="wr">
+    <div class="wr-nav">
+      <button class="icon-btn" id="prev" data-i18n-title="wr.prev"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button>
+      <b id="month">…</b>
+      <button class="icon-btn" id="next" data-i18n-title="wr.next"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button>
+    </div>
+    <div class="wr-grid" id="wr"></div>
+  </div>
+
+  <footer>who-is-home</footer>
+</div>
+
+<script src="/i18n.js"></script>
+<script src="/common.js"></script>
+<script src="/wrapped.js"></script>
+</body>
+</html>

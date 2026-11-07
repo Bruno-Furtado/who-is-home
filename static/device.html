@@ -36,9 +36,14 @@
     <div class="dhead-main">
       <div class="dname"><h1 id="d-name">…</h1><button class="btn small" id="edit" data-i18n="edit.button"></button></div>
       <div class="chips-row" id="d-chips"></div>
+      <div class="members" id="d-members" hidden></div>
       <form class="edit" id="edit-form" hidden>
         <label><span data-i18n="edit.name"></span><input id="e-name" maxlength="40" autocomplete="off"></label>
         <label><span data-i18n="edit.kind"></span><select id="e-kind"></select></label>
+        <label><span data-i18n="edit.person"></span><select id="e-person"></select></label>
+        <label id="e-new-wrap" hidden><span data-i18n="pp.name"></span><input id="e-new" maxlength="30" autocomplete="off"></label>
+        <label><span data-i18n="edit.join"></span><select id="e-join"></select></label>
+        <label class="check"><input type="checkbox" id="e-hidden"><span data-i18n="edit.infra"></span></label>
         <button class="btn primary" type="submit" data-i18n="edit.save"></button>
         <button class="btn" type="button" id="e-cancel" data-i18n="edit.cancel"></button>
         <span class="res" id="e-res"></span>
@@ -68,13 +73,16 @@
   </section>
 
   <section class="grid two">
-    <div class="card"><h3 data-i18n="rep.hours"></h3><p class="hint" data-i18n="d.hoursHint"></p><div id="hours"></div></div>
-    <div class="card"><h3 data-i18n="rep.cats"></h3><p class="hint" data-i18n="rep.catsHint"></p><div id="cats"></div></div>
+    <div class="card"><h3 data-i18n="rep.hours"></h3><div id="hours"></div></div>
+    <div class="card"><h3 data-i18n="rep.cats"></h3><div id="cats"></div></div>
   </section>
 
   <section class="grid two">
-    <div class="card"><h3 data-i18n="rep.sites"></h3><p class="hint" data-i18n="d.sitesHint"></p><div id="sites"></div></div>
-    <div class="card"><h3 data-i18n="rep.blocked"></h3><p class="hint" data-i18n="rep.blockedHint"></p><div id="blocked"></div></div>
+    <div class="card"><h3 data-i18n="rep.apps"></h3><div id="apps"></div></div>
+    <div class="card"><h3 data-i18n="rep.sites"></h3><div id="sites"></div></div>
+  </section>
+  <section>
+    <div class="card"><h3 data-i18n="rep.blocked"></h3><div id="blocked"></div></div>
   </section>
 
   <footer>who-is-home</footer>

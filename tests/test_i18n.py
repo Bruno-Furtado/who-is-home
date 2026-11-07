@@ -20,7 +20,7 @@ import who_is_home as wh  # noqa: E402
 STATIC = os.path.join(ROOT, "static")
 PLACEHOLDER = re.compile(r"\{(\w+)\}")
 # chaves montadas em tempo de execução ("cat." + código, "kind." + tipo...)
-DYNAMIC_PREFIXES = ("cat.", "kind.", "src.", "ev.", "ntfy.err.")
+DYNAMIC_PREFIXES = ("cat.", "kind.", "src.", "ev.", "ntfy.err.", "title.")
 
 
 def read(name):
@@ -51,9 +51,9 @@ class UiTest(ParityMixin, unittest.TestCase):
     def test_used_keys_exist(self):
         keys = set(ui_dict()["en"])
         used = set()
-        for name in ("index.html", "device.html"):
+        for name in ("index.html", "device.html", "wrapped.html"):
             used |= set(re.findall(r'data-i18n(?:-html|-title)?="([^"]+)"', read(name)))
-        for name in ("app.js", "device.js", "common.js"):
+        for name in ("app.js", "device.js", "common.js", "wrapped.js"):
             used |= set(re.findall(r'\bt\("([^"]+)"', read(name)))
         missing = {k for k in used if k not in keys and not k.endswith(".")}
         self.assertEqual(missing, set())

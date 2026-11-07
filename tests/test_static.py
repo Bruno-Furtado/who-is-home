@@ -23,7 +23,7 @@ class StaticTest(unittest.TestCase):
             self.assertTrue(os.path.isfile(os.path.join(wh.STATIC, name)), "%s → %s" % (path, name))
 
     def test_html_refs_are_served(self):
-        for name in ("index.html", "device.html"):
+        for name in ("index.html", "device.html", "wrapped.html"):
             with open(os.path.join(wh.STATIC, name), encoding="utf-8") as f:
                 html = f.read()
             for ref in re.findall(r'(?:src|href)="(/[^"]*)"', html):

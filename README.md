@@ -20,6 +20,8 @@
 - 🟢 **Live devices**: who's on now, with real names and the last time each was seen.
 - ⏱️ **Time in use**: per device, per hour and per category (social, video, games, work…).
 - 🌐 **Sites**: the most visited and the blocked ones, per device.
+- 👥 **People**: who uses it most, who works most, routines and fun titles (night owl, early bird…).
+- 🎁 **Wrapped**: the month in review, with top apps, records and one card per person.
 - 🌙 **Late-night use** and a day-by-day timeline for each device.
 - 🔔 **Phone alerts**: new device on the network and a weekly summary.
 - 🪶 **Zero dependencies**: just Python. The dashboard works even with the internet down.
@@ -31,7 +33,7 @@
     <td width="34%" valign="top"><img src="docs/en/demo.gif" alt="Phone dashboard: devices, report and a device's day-by-day"></td>
     <td valign="top">
       <img src="docs/en/dashboard.png" alt="Dashboard on the desktop"><br><br>
-      <img src="docs/en/device.png" alt="Device page">
+      <img src="docs/en/wrapped.png" alt="Wrapped: the month in review">
     </td>
   </tr>
 </table>

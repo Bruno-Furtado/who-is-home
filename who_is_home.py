@@ -34,6 +34,8 @@ import subprocess
 import sys
 import threading
 import time
+from bisect import bisect_left, bisect_right
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -228,8 +230,40 @@ CREATE TABLE IF NOT EXISTS events(id INTEGER PRIMARY KEY, ts REAL, kind TEXT, ma
 CREATE INDEX IF NOT EXISTS events_ts ON events(ts);
 CREATE TABLE IF NOT EXISTS state(key TEXT PRIMARY KEY, value TEXT);
 CREATE TABLE IF NOT EXISTS notifications(id INTEGER PRIMARY KEY, ts REAL, title TEXT, body TEXT, tag TEXT, sent_ts REAL);
+CREATE TABLE IF NOT EXISTS people(id INTEGER PRIMARY KEY, name TEXT NOT NULL, created REAL);
 """
+# Colunas que entraram depois da primeira versão (ALTER TABLE em bancos antigos).
+COLUMNS = {
+    "devices": [("person_id", "INTEGER"), ("parent", "TEXT"), ("hidden", "INTEGER DEFAULT 0")],
+    "activity": [("app", "TEXT")],
+}
+SCHEMA_VERSION = 2
 WRITE = threading.Lock()   # um escritor por vez no SQLite (coletor, nomes e painel rodam em threads)
+
+
+def migrate(db):
+    """Atualiza bancos antigos: colunas novas e, uma vez, o histórico com as regras novas de uso e categoria."""
+    for table, cols in COLUMNS.items():
+        have = {r[1] for r in db.execute("PRAGMA table_info(%s)" % table)}
+        for name, decl in cols:
+            if name not in have:
+                db.execute("ALTER TABLE %s ADD COLUMN %s %s" % (table, name, decl))
+    version = int(state_get(db, "schema", 1))
+    if version < 2:
+        # v2: categorias ampliadas, nomes internos (wpad.box) fora, "outros" deixa de contar como uso,
+        # roteadores e este computador fora das somas
+        for (dom,) in db.execute("SELECT DISTINCT domain FROM domains").fetchall():
+            if is_local_name(dom):
+                db.execute("DELETE FROM domains WHERE domain=?", (dom,))
+            else:
+                db.execute("UPDATE domains SET cat=? WHERE domain=?", (categorize(dom), dom))
+        db.execute("DELETE FROM activity WHERE cat IN (%s)" % ",".join("?" * len(PASSIVE_CATEGORIES)), PASSIVE_CATEGORIES)
+        db.execute("UPDATE devices SET hidden=1 WHERE kind='router'")
+        own = own_macs()
+        if own:
+            db.execute("UPDATE devices SET hidden=1 WHERE mac IN (%s)" % ",".join("?" * len(own)), sorted(own))
+    state_set(db, "schema", SCHEMA_VERSION)
+    db.commit()
 
 
 # --------------------------------------------------------------------------
@@ -284,6 +318,8 @@ def load_config():
     LANG = cfg["language"] if cfg.get("language") in TEXTS else detect_language()
     db = connect()
     db.executescript(SCHEMA)
+    with WRITE:
+        migrate(db)
     db.close()
     return cfg
 
@@ -428,6 +464,23 @@ def parse_ifconfig_inet(text, ip):
 def parse_ifconfig_ether(text):
     m = re.search(r"\bether ([0-9a-f:]{11,17})", text)
     return norm_mac(m.group(1)) if m else None
+
+
+def own_macs():
+    """Todos os MACs desta máquina (cabo e Wi-Fi): ela aparece na rede, mas não é "uso" de ninguém."""
+    if IS_MAC:
+        out = run_cmd(["ifconfig"])[1]
+        return {m for m in (norm_mac(x) for x in re.findall(r"\bether ([0-9a-f:]{11,17})", out)) if m}
+    macs = set()
+    try:
+        for iface in os.listdir("/sys/class/net"):
+            with open("/sys/class/net/%s/address" % iface) as f:
+                mac = norm_mac(f.read())
+            if mac and mac != "00:00:00:00:00:00":
+                macs.add(mac)
+    except OSError:
+        pass
+    return macs
 
 
 def own_interface():
@@ -668,7 +721,8 @@ CATEGORIES = {
               "blizzard.com", "activision.com", "callofduty.com", "ubisoft.com", "miniclip.com", "chess.com",
               "gamepass.com", "brawlstars.com", "clashroyale.com"],
     "messaging": ["whatsapp.com", "whatsapp.net", "telegram.org", "t.me", "discord.com", "discord.gg",
-                  "discordapp.com", "discordapp.net", "signal.org", "messenger.com", "skype.com", "viber.com"],
+                  "discordapp.com", "discordapp.net", "signal.org", "messenger.com", "skype.com", "viber.com",
+                  "gmail.com", "mail.google.com", "mail.yahoo.com", "icloud-mail.apple.com"],
     "shopping": ["amazon.com", "amazon.com.br", "media-amazon.com", "ssl-images-amazon.com", "mercadolivre.com.br",
                  "mercadolibre.com", "mlstatic.com", "mercadopago.com", "shopee.com.br", "shopee.com", "susercontent.com",
                  "magazineluiza.com.br", "magalu.com", "aliexpress.com", "alicdn.com", "shein.com", "ltwebstatic.com",
@@ -681,7 +735,10 @@ CATEGORIES = {
              "github.com", "githubusercontent.com", "atlassian.net", "atlassian.com", "jira.com", "figma.com",
              "docs.google.com", "drive.google.com", "meet.google.com", "classroom.google.com", "dropbox.com",
              "canva.com", "trello.com", "asana.com", "chatgpt.com", "openai.com", "claude.ai", "anthropic.com",
-             "gemini.google.com", "stackoverflow.com", "webex.com"],
+             "gemini.google.com", "stackoverflow.com", "webex.com", "cloud.microsoft", "office.net",
+             "microsoft365.com", "onedrive.com", "sharepointonline.com", "slackb.com", "claude.com", "warp.dev",
+             "service-now.com", "servicenow.com", "duolingo.com", "linear.app", "miro.com", "loom.com",
+             "vercel.com", "gitlab.com", "bitbucket.org"],
     "search": ["google.com", "google.com.br", "bing.com", "duckduckgo.com", "yahoo.com", "wikipedia.org",
                "wikimedia.org", "ecosia.org"],
     "ads": ["doubleclick.net", "googlesyndication.com", "googleadservices.com", "google-analytics.com",
@@ -689,7 +746,13 @@ CATEGORIES = {
             "outbrain.com", "scorecardresearch.com", "hotjar.com", "app-measurement.com", "appsflyer.com",
             "adjust.com", "branch.io", "amplitude.com", "mixpanel.com", "segment.io", "crashlytics.com",
             "unityads.unity3d.com", "applovin.com", "moatads.com", "rubiconproject.com", "pubmatic.com",
-            "casalemedia.com", "adsrvr.org", "facebook.net"],
+            "casalemedia.com", "adsrvr.org", "facebook.net",
+            # SDKs de anúncio de apps e jogos de celular (vistos numa casa de verdade)
+            "moloco.com", "amazon-adsystem.com", "pangle.io", "pangle-b.io", "inner-active.mobi", "inmobi.com",
+            "unity3d.com", "mtgglobals.com", "mintegral.com", "rayjump.com", "bidmachine.io", "vungle.com",
+            "liftoff.io", "chartboost.com", "supersonicads.com", "ironsrc.mobi", "adjust.io", "adcolony.com",
+            "tapjoy.com", "fyber.com", "smaato.net", "everestop.io", "blueduckredapple.com", "thecatmachine.com",
+            "app-ads-services.com", "app-analytics-services.com", "applovin.net", "applvn.com"],
     "system": ["apple.com", "icloud.com", "icloud-content.com", "mzstatic.com", "apple-dns.net", "aaplimg.com",
                "cdn-apple.com", "push.apple.com", "itunes.apple.com", "apple.news", "googleapis.com", "gstatic.com",
                "gvt1.com", "gvt2.com", "1e100.net", "android.com", "googleusercontent.com", "clients.google.com",
@@ -701,14 +764,52 @@ CATEGORIES = {
                "samsungqbe.com", "lgtvsdp.com", "lge.com", "xiaomi.com", "miui.com", "mi.com", "tplinkcloud.com",
                "tp-link.com", "amazon-dns.com", "a2z.com", "amazonvideo.com", "digicert.com", "sectigo.com",
                "letsencrypt.org", "ocsp.digicert.com", "adguard.com", "adtidy.org", "mozilla.org", "mozilla.net",
-               "firefox.com", "spotify.map.fastly.net", "nflxext.com.edgesuite.net", "doh.dns.apple.com"],
+               "firefox.com", "spotify.map.fastly.net", "nflxext.com.edgesuite.net", "doh.dns.apple.com",
+               "trendmicro.com", "mcafee.com", "avast.com", "kaspersky.com", "trafficmanager.net", "root-servers.net",
+               "lencr.org", "sentry.io", "safebrowsing.apple", "gvt3.com", "yahoodns.net", "msidentity.com",
+               "static.microsoft", "azure.com", "azure-devices.net", "azureedge.net", "windows.com", "windows.net",
+               "vercel-dns.com", "adblockplus.org", "apple-cloudkit.com", "ntp.br", "office.com.edgekey.net"],
 }
+# Apps: nomes próprios (não são traduzidos). A chave casa com o domínio e com os subdomínios dele.
+APPS = {
+    "WhatsApp": ["whatsapp.com", "whatsapp.net"], "Instagram": ["instagram.com", "cdninstagram.com"],
+    "Facebook": ["facebook.com", "fbcdn.net", "messenger.com"], "TikTok": ["tiktok.com", "tiktokcdn.com", "tiktokv.com",
+    "tiktokcdn-us.com", "byteoversea.com", "ibytedtos.com"], "YouTube": ["youtube.com", "googlevideo.com", "ytimg.com",
+    "youtu.be"], "YouTube Music": ["music.youtube.com"], "Netflix": ["netflix.com", "nflxvideo.net", "nflxso.net",
+    "nflximg.net", "nflxext.com"], "Prime Video": ["primevideo.com", "aiv-cdn.net"], "Disney+": ["disneyplus.com",
+    "disney-plus.net", "bamgrid.com", "dssott.com"], "Max": ["max.com", "hbomax.com"], "Globoplay": ["globoplay.globo.com"],
+    "Twitch": ["twitch.tv", "ttvnw.net", "jtvnw.net"], "Spotify": ["spotify.com", "scdn.co", "spotifycdn.com"],
+    "Deezer": ["deezer.com", "dzcdn.net"], "X": ["twitter.com", "x.com", "twimg.com"], "LinkedIn": ["linkedin.com",
+    "licdn.com"], "Pinterest": ["pinterest.com", "pinimg.com"], "Reddit": ["reddit.com", "redd.it", "redditmedia.com",
+    "redditstatic.com"], "Kwai": ["kwai.com", "kwai.net"], "Telegram": ["telegram.org", "t.me"], "Discord": ["discord.com",
+    "discord.gg", "discordapp.com", "discordapp.net"], "Gmail": ["gmail.com", "mail.google.com"],
+    "Microsoft 365": ["office.com", "office365.com", "microsoftonline.com", "sharepoint.com", "sharepointonline.com",
+                      "outlook.com", "cloud.microsoft", "office.net", "microsoft365.com", "onedrive.com"],
+    "Teams": ["teams.microsoft.com", "teams.live.com"], "Zoom": ["zoom.us", "zoom.com"], "Slack": ["slack.com",
+    "slack-edge.com", "slackb.com"], "GitHub": ["github.com", "githubusercontent.com"], "Notion": ["notion.so", "notion.com"],
+    "Google Docs": ["docs.google.com", "drive.google.com"], "Google Meet": ["meet.google.com"], "ChatGPT": ["chatgpt.com",
+    "openai.com"], "Claude": ["claude.ai", "claude.com", "anthropic.com"], "Gemini": ["gemini.google.com"],
+    "Duolingo": ["duolingo.com"], "Google": ["google.com", "google.com.br"], "Bing": ["bing.com"],
+    "Wikipedia": ["wikipedia.org", "wikimedia.org"], "Amazon": ["amazon.com", "amazon.com.br", "media-amazon.com",
+    "ssl-images-amazon.com"], "Mercado Livre": ["mercadolivre.com.br", "mercadolibre.com", "mlstatic.com",
+    "mercadopago.com"], "Shopee": ["shopee.com.br", "shopee.com", "susercontent.com"], "Shein": ["shein.com",
+    "ltwebstatic.com"], "AliExpress": ["aliexpress.com", "alicdn.com"], "iFood": ["ifood.com.br"],
+    "Roblox": ["roblox.com", "rbxcdn.com"], "Fortnite": ["fortnite.com", "epicgames.com", "epicgames.dev"],
+    "Minecraft": ["minecraft.net", "mojang.com"], "PlayStation": ["playstation.net", "playstation.com"],
+    "Xbox": ["xboxlive.com", "xbox.com"], "Steam": ["steampowered.com", "steamcommunity.com", "steamcontent.com",
+    "steamstatic.com"], "Free Fire": ["freefiremobile.com", "garena.com"], "Uol": ["uol.com.br"], "g1": ["g1.globo.com"],
+}
+APP_OF = {}
+for _app, _domains in APPS.items():
+    for _d in _domains:
+        APP_OF[_d] = _app
 CATEGORY_OF = {}
 for _cat, _domains in CATEGORIES.items():
     for _d in _domains:
         CATEGORY_OF.setdefault(_d, _cat)
-# Categorias que não contam como "uso" (o aparelho faz isso sozinho, mesmo parado).
-PASSIVE_CATEGORIES = ("system", "ads")
+# Categorias que não contam como "uso" (o aparelho faz isso sozinho, mesmo parado). "other" também fica de fora:
+# numa casa real, a maior parte dos sites sem categoria é tráfego automático (antivírus, telemetria, anúncios).
+PASSIVE_CATEGORIES = ("system", "ads", "other")
 BLOCK_REASONS = ("FilteredBlackList", "FilteredBlockedService", "FilteredSafeBrowsing", "FilteredParental",
                  "FilteredInvalid")
 
@@ -723,14 +824,22 @@ def base_domain(name):
     return ".".join(parts[-2:])
 
 
-def categorize(name):
-    """Categoria pelo domínio mais específico que estiver na tabela (g1.globo.com antes de globo.com)."""
+def lookup_suffix(table, name):
+    """Valor do domínio mais específico que estiver na tabela (g1.globo.com antes de globo.com)."""
     parts = (name or "").lower().rstrip(".").split(".")
-    for i in range(len(parts) - 1):
-        cat = CATEGORY_OF.get(".".join(parts[i:]))
-        if cat:
-            return cat
-    return "other"
+    for i in range(len(parts)):
+        hit = table.get(".".join(parts[i:]))
+        if hit:
+            return hit
+    return None
+
+
+def categorize(name):
+    return lookup_suffix(CATEGORY_OF, name) or "other"
+
+
+def app_of(name):
+    return lookup_suffix(APP_OF, name)
 
 
 def display_domain(name):
@@ -749,8 +858,10 @@ def display_domain(name):
 
 def is_local_name(name):
     n = (name or "").lower().rstrip(".")
-    return (not n or "." not in n or n.endswith((".local", ".arpa", ".lan", ".home", ".localdomain", ".internal"))
-            or n in ("localhost", "wpad"))
+    # ".box" é o domínio interno dos roteadores da Claro/NET; "wpad.*" é a busca automática de proxy do Windows
+    return (not n or "." not in n or n.endswith((".local", ".arpa", ".lan", ".home", ".localdomain", ".internal",
+                                                 ".box", ".invalid", ".localhost"))
+            or n in ("localhost", "wpad") or n.startswith("wpad."))
 
 
 # --------------------------------------------------------------------------
@@ -905,6 +1016,7 @@ class Collector:
         self.adguard = AdGuard(cfg)
         self.ipmac = {}               # ip → mac (tabela ARP mais recente)
         self.own = (None, None, None)
+        self.own_macs = own_macs()
         self.lock = threading.Lock()
         self.status = {"adguard": "unset", "adguard_error": None, "last_poll": None, "last_scan": None,
                        "scan_devices": 0}
@@ -916,8 +1028,9 @@ class Collector:
         """Aparelho deu sinal: cria se for novo (com aviso), abre sessão se estava desligado."""
         row = db.execute("SELECT online, last_seen, nickname, hostname FROM devices WHERE mac=?", (mac,)).fetchone()
         if row is None:
-            db.execute("INSERT INTO devices(mac, ip, first_seen, last_seen, last_dns, online) VALUES(?,?,?,?,?,1)",
-                       (mac, ip, ts, ts, ts if via_dns else None))
+            # placas desta máquina já entram fora das somas (o tráfego dela é do down-again e do próprio coletor)
+            db.execute("INSERT INTO devices(mac, ip, first_seen, last_seen, last_dns, online, hidden) VALUES(?,?,?,?,?,1,?)",
+                       (mac, ip, ts, ts, ts if via_dns else None, 1 if mac in self.own_macs else 0))
             db.execute("INSERT INTO presence(mac, start_ts, end_ts) VALUES(?,?,NULL)", (mac, ts))
             db.execute("INSERT INTO events(ts, kind, mac, detail) VALUES(?,?,?,?)", (ts, "new", mac, ip))
             if state_get(db, "bootstrapped") == "1" and self.cfg.get("notify_new_devices"):
@@ -1180,9 +1293,9 @@ def ingest(db, entries, min_queries, collector=None):
         hourly[hk] = (q + 1, b + blocked)
         if not blocked and cat not in PASSIVE_CATEGORIES:
             mk = (mac, int(ts // 60))
-            n, first_cat = minutes.get(mk, (0, None))
-            # categoria do minuto: a primeira que não for "outros"
-            minutes[mk] = (n + 1, first_cat if first_cat and first_cat != "other" else cat)
+            n, first_cat, first_app = minutes.get(mk, (0, cat, None))
+            # categoria do minuto: a primeira consulta; app: o primeiro reconhecido
+            minutes[mk] = (n + 1, first_cat, first_app or app_of(e["name"]))
         last[mac] = (e["ip"], max(ts, last.get(mac, (None, 0))[1]))
     for (day, mac, dom), (q, b, cat) in domains.items():
         db.execute("INSERT OR IGNORE INTO domains(day, mac, domain, cat, queries, blocked) VALUES(?,?,?,?,0,0)",
@@ -1193,9 +1306,9 @@ def ingest(db, entries, min_queries, collector=None):
         db.execute("INSERT OR IGNORE INTO hourly(day, mac, hour, queries, blocked) VALUES(?,?,?,0,0)", (day, mac, hour))
         db.execute("UPDATE hourly SET queries=queries+?, blocked=blocked+? WHERE day=? AND mac=? AND hour=?",
                    (q, b, day, mac, hour))
-    for (mac, minute), (n, cat) in minutes.items():
+    for (mac, minute), (n, cat, app) in minutes.items():
         if n >= min_queries:
-            db.execute("INSERT OR IGNORE INTO activity(mac, minute, cat) VALUES(?,?,?)", (mac, minute, cat))
+            db.execute("INSERT OR IGNORE INTO activity(mac, minute, cat, app) VALUES(?,?,?,?)", (mac, minute, cat, app))
     if collector is not None:
         for mac, (ip, ts) in last.items():
             if ts > time.time() - collector.cfg["offline_minutes"] * 60:
@@ -1205,8 +1318,14 @@ def ingest(db, entries, min_queries, collector=None):
 
 # --------------------------------------------------------------------------
 # estatísticas para o painel
+#
+# Um aparelho pode ter vários MACs (cabo e Wi-Fi, ou o MAC privado que o celular trocou): os "filhos" apontam para o
+# principal em devices.parent e tudo soma no principal, sem contar duas vezes o mesmo minuto. Aparelhos marcados
+# como infraestrutura (hidden: roteador, switch, este computador) aparecem na lista, mas ficam fora das contas.
 
 PERIODS = {"today": 1, "7d": 7, "30d": 30}
+DAY_START = 5 * 60          # o dia de uso vai das 5h às 5h: quem usa à 1h da manhã ainda está "no dia anterior"
+STREAK_GAP = 3              # minutos sem uso que ainda contam como a mesma sequência
 
 
 def period_range(key, now=None):
@@ -1218,85 +1337,55 @@ def period_range(key, now=None):
     return t0, min(t1, now), day_list
 
 
+def month_range(month, now=None):
+    """'2026-11' → (início, fim ou agora, dias). Mês inválido = mês atual."""
+    now = now or time.time()
+    try:
+        start = datetime.strptime(month or "", "%Y-%m")
+    except ValueError:
+        start = datetime.fromtimestamp(now).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    end = (start.replace(day=28) + timedelta(days=4)).replace(day=1)
+    t0, t1 = start.timestamp(), min(end.timestamp(), now)
+    days, d = [], start
+    while d.timestamp() < t1:
+        days.append(d.strftime("%Y-%m-%d"))
+        d += timedelta(days=1)
+    return t0, t1, days or [start.strftime("%Y-%m-%d")]
+
+
 def device_rows(db):
+    cols = "mac, ip, hostname, name_source, nickname, kind, first_seen, last_seen, online, person_id, parent, hidden"
     return {r[0]: {"mac": r[0], "ip": r[1], "hostname": r[2], "name_source": r[3], "nickname": r[4], "kind": r[5],
-                   "first_seen": r[6], "last_seen": r[7], "online": bool(r[8])}
-            for r in db.execute("SELECT mac, ip, hostname, name_source, nickname, kind, first_seen, last_seen, online "
-                                "FROM devices").fetchall()}
+                   "first_seen": r[6], "last_seen": r[7], "online": bool(r[8]), "person_id": r[9], "parent": r[10],
+                   "hidden": bool(r[11])}
+            for r in db.execute("SELECT %s FROM devices" % cols).fetchall()}
 
 
 def name_of(d):
     return d["nickname"] or d["hostname"] or d["ip"] or d["mac"]
 
 
-def in_days(days):
-    return ",".join("?" * len(days))
+def marks(values):
+    return ",".join("?" * len(values))
 
 
-def devices_list(db, cfg):
-    t0, t1, days = period_range("today")
-    devs = device_rows(db)
-    minutes = dict(db.execute("SELECT mac, COUNT(*) FROM activity WHERE minute >= ? GROUP BY mac",
-                              (int(t0 // 60),)).fetchall())
-    queries = {r[0]: (r[1], r[2]) for r in db.execute(
-        "SELECT mac, SUM(queries), SUM(blocked) FROM hourly WHERE day=? GROUP BY mac", (days[0],)).fetchall()}
-    top = {}
-    for mac, cat, n in db.execute("SELECT mac, cat, COUNT(*) AS n FROM activity WHERE minute >= ? GROUP BY mac, cat",
-                                  (int(t0 // 60),)).fetchall():
-        if n > top.get(mac, (None, 0))[1]:
-            top[mac] = (cat, n)
-    out = []
+def canon_map(devs):
+    """mac → mac do aparelho principal (um nível só: pai inexistente, ele mesmo ou que também é filho é ignorado)."""
+    out = {}
     for mac, d in devs.items():
-        q, b = queries.get(mac, (0, 0))
-        out.append(dict(d, name=name_of(d), private_mac=is_private_mac(mac), today_minutes=minutes.get(mac, 0),
-                        today_queries=q or 0, today_blocked=b or 0, top_cat=top.get(mac, (None, 0))[0]))
-    out.sort(key=lambda x: (not x["online"], -x["today_minutes"], -(x["last_seen"] or 0)))
+        p = d["parent"]
+        out[mac] = p if p and p != mac and p in devs and not devs[p]["parent"] else mac
     return out
 
 
-def overview(db, key, cfg):
-    t0, t1, days = period_range(key)
-    m0 = int(t0 // 60)
-    devs = device_rows(db)
-    ph = in_days(days)
-    q_tot = db.execute("SELECT COALESCE(SUM(queries), 0), COALESCE(SUM(blocked), 0) FROM hourly WHERE day IN (%s)" % ph,
-                       days).fetchone()
-    usage = [{"mac": mac, "name": name_of(devs[mac]) if mac in devs else mac,
-              "kind": devs.get(mac, {}).get("kind"), "minutes": n}
-             for mac, n in db.execute("SELECT mac, COUNT(*) AS n FROM activity WHERE minute >= ? GROUP BY mac "
-                                      "ORDER BY n DESC", (m0,)).fetchall()]
-    cats = [{"cat": c, "minutes": n} for c, n in db.execute(
-        "SELECT cat, COUNT(*) AS n FROM activity WHERE minute >= ? GROUP BY cat ORDER BY n DESC", (m0,)).fetchall()]
-    hours = [0] * 24
-    for h, n in db.execute("SELECT CAST(strftime('%H', minute * 60, 'unixepoch', 'localtime') AS INTEGER), COUNT(*) "
-                           "FROM activity WHERE minute >= ? GROUP BY 1", (m0,)).fetchall():
-        hours[int(h)] = n
-    nf, nt = int(cfg["night_from"]), int(cfg["night_to"])
-    night = []
-    for mac, n in db.execute("SELECT mac, COUNT(*) FROM activity WHERE minute >= ? AND "
-                             "CAST(strftime('%H', minute * 60, 'unixepoch', 'localtime') AS INTEGER) >= ? AND "
-                             "CAST(strftime('%H', minute * 60, 'unixepoch', 'localtime') AS INTEGER) < ? "
-                             "GROUP BY mac ORDER BY 2 DESC", (m0, nf, nt)).fetchall():
-        night.append({"mac": mac, "name": name_of(devs[mac]) if mac in devs else mac, "kind": devs.get(mac, {}).get("kind"),
-                      "minutes": n})
-    top_domains = [{"domain": d, "cat": c, "queries": q, "devices": n} for d, c, q, n in db.execute(
-        "SELECT domain, cat, SUM(queries) AS q, COUNT(DISTINCT mac) FROM domains WHERE day IN (%s) AND cat NOT IN "
-        "('system', 'ads') GROUP BY domain ORDER BY q DESC LIMIT 15" % ph, days).fetchall()]
-    blocked = [{"domain": d, "cat": c, "blocked": b, "devices": n} for d, c, b, n in db.execute(
-        "SELECT domain, cat, SUM(blocked) AS b, COUNT(DISTINCT mac) FROM domains WHERE day IN (%s) AND blocked > 0 "
-        "GROUP BY domain ORDER BY b DESC LIMIT 10" % ph, days).fetchall()]
-    new_devices = [{"mac": d["mac"], "name": name_of(d), "kind": d["kind"], "first_seen": d["first_seen"]}
-                   for d in sorted(devs.values(), key=lambda x: -(x["first_seen"] or 0))
-                   if (d["first_seen"] or 0) >= t0]
-    events = [{"ts": ts, "kind": k, "mac": mac, "name": name_of(devs[mac]) if mac in devs else (detail or mac),
-               "detail": detail}
-              for ts, k, mac, detail in db.execute("SELECT ts, kind, mac, detail FROM events WHERE ts >= ? "
-                                                   "ORDER BY ts DESC LIMIT 30", (t0,)).fetchall()]
-    return {"period": key, "from": t0, "to": t1, "days": days,
-            "totals": {"queries": q_tot[0], "blocked": q_tot[1], "active_devices": len(usage),
-                       "new_devices": len(new_devices), "minutes": sum(u["minutes"] for u in usage)},
-            "usage": usage, "categories": cats, "hours": hours, "night": night, "night_from": nf, "night_to": nt,
-            "top_domains": top_domains, "blocked": blocked, "new_devices": new_devices, "events": events}
+def merge_intervals(items):
+    out = []
+    for a, b in sorted(items):
+        if out and a <= out[-1][1]:
+            out[-1][1] = max(out[-1][1], b)
+        else:
+            out.append([a, b])
+    return out
 
 
 def merge_minutes(minutes):
@@ -1310,22 +1399,335 @@ def merge_minutes(minutes):
     return out
 
 
-def device_detail(db, mac, key, cfg):
-    devs = device_rows(db)
-    if mac not in devs:
+class Model:
+    """Aparelhos agrupados (principal + MACs juntados) e pessoas, lidos uma vez por pedido."""
+
+    def __init__(self, db):
+        self.devs = device_rows(db)
+        self.people = {r[0]: r[1] for r in db.execute("SELECT id, name FROM people ORDER BY name COLLATE NOCASE")}
+        self.canon = canon_map(self.devs)
+        self.groups = {}
+        for mac in sorted(self.devs):
+            self.groups.setdefault(self.canon[mac], []).append(mac)
+
+    def main(self, mac):
+        return self.devs.get(self.canon.get(mac, mac))
+
+    def counted(self, mac):
+        m = self.main(mac)
+        return m is not None and not m["hidden"]
+
+    def person_of(self, mac):
+        m = self.main(mac)
+        return m["person_id"] if m and m["person_id"] in self.people else None
+
+    def macs(self, mains):
+        return [m for c in mains for m in self.groups.get(c, [])]
+
+    def info(self, c):
+        """Resumo do aparelho principal somando os MACs juntados (online se qualquer um estiver)."""
+        d = self.devs[c]
+        members = [self.devs[m] for m in self.groups[c]]
+        on = [m for m in members if m["online"]]
+        latest = max(members, key=lambda m: m["last_seen"] or 0)
+        firsts = [m["first_seen"] for m in members if m["first_seen"]]
+        return dict(d, name=name_of(d), ip=(on[0] if on else latest)["ip"], online=bool(on),
+                    last_seen=latest["last_seen"], first_seen=min(firsts) if firsts else None,
+                    private_mac=is_private_mac(c), person=self.people.get(d["person_id"]),
+                    members=[{"mac": m["mac"], "ip": m["ip"], "online": m["online"],
+                              "private_mac": is_private_mac(m["mac"])} for m in members if m["mac"] != c])
+
+
+def activity_by(db, model, m0, m1=None, by="device", only=None):
+    """{chave: {minuto: (categoria, app)}}: o mesmo minuto em dois MACs do mesmo aparelho (ou da mesma pessoa)
+    conta uma vez. by: 'device' (principal) ou 'person'. only: limita a esses MACs (inclui infraestrutura)."""
+    sql = "SELECT mac, minute, cat, app FROM activity WHERE minute >= ?" + (" AND minute < ?" if m1 else "")
+    out = {}
+    for mac, minute, cat, app in db.execute(sql, (m0, m1) if m1 else (m0,)).fetchall():
+        if only is not None:
+            if mac not in only:
+                continue
+        elif not model.counted(mac):
+            continue
+        key = model.canon.get(mac, mac) if by == "device" else model.person_of(mac)
+        if key is not None:
+            out.setdefault(key, {}).setdefault(minute, (cat, app))
+    return {k: {m: mins[m] for m in in_use(mins)} for k, mins in out.items()}
+
+
+USE_WINDOW, USE_MIN = 5, 4      # uso de verdade: pelo menos 4 minutos com consultas em ±5 minutos
+
+
+def in_use(minutes):
+    """Minutos que fazem parte de um uso de verdade. Apps sincronizam sozinhos a madrugada inteira (uma consulta
+    a cada 10–20 min); quem está usando gera minutos seguidos. Calibrado com dados reais de uma casa."""
+    s = sorted(minutes)
+    return {m for m in s if bisect_right(s, m + USE_WINDOW) - bisect_left(s, m - USE_WINDOW) >= USE_MIN}
+
+
+def query_totals(db, macs, days):
+    if not macs:
+        return 0, 0
+    return db.execute("SELECT COALESCE(SUM(queries), 0), COALESCE(SUM(blocked), 0) FROM hourly WHERE day IN (%s) "
+                      "AND mac IN (%s)" % (marks(days), marks(macs)), days + macs).fetchone()
+
+
+def top_domains(db, model, macs, days, field="queries", limit=15, exclude=("system", "ads")):
+    """Sites somados por domínio, com quantos aparelhos (principais) acessaram."""
+    if not macs:
+        return []
+    col = "queries" if field == "queries" else "blocked"
+    agg = {}
+    for dom, cat, mac, n in db.execute(
+            "SELECT domain, cat, mac, SUM(%s) FROM domains WHERE day IN (%s) AND mac IN (%s) %s GROUP BY domain, mac"
+            % (col, marks(days), marks(macs), "AND cat NOT IN (%s)" % marks(exclude) if exclude else ""),
+            days + macs + list(exclude or ())).fetchall():
+        if not n:
+            continue
+        a = agg.setdefault(dom, {"domain": dom, "cat": cat, field: 0, "devices": set()})
+        a[field] += n
+        a["devices"].add(model.canon.get(mac, mac))
+    rows = sorted(agg.values(), key=lambda a: -a[field])[:limit]
+    return [dict(a, devices=len(a["devices"])) for a in rows]
+
+
+def top_apps(db, macs, days, minute_values=(), limit=8):
+    """Apps por minutos de uso (quando há) e por consultas (sempre há, inclusive no histórico antigo).
+    minute_values: [(categoria, app), ...] de cada minuto de uso."""
+    if not macs:
+        return []
+    apps = {}
+    for dom, n in db.execute("SELECT domain, SUM(queries) FROM domains WHERE day IN (%s) AND mac IN (%s) GROUP BY domain"
+                             % (marks(days), marks(macs)), days + macs).fetchall():
+        app = app_of(dom)
+        if app:
+            apps.setdefault(app, {"app": app, "queries": 0, "minutes": 0})["queries"] += n or 0
+    for cat, app in minute_values:
+        if app:
+            apps.setdefault(app, {"app": app, "queries": 0, "minutes": 0})["minutes"] += 1
+    return sorted(apps.values(), key=lambda a: (-a["minutes"], -a["queries"]))[:limit]
+
+
+def clock(minute_of_usage_day):
+    """Minutos desde as 5h → 'HH:MM'."""
+    m = (int(minute_of_usage_day) + DAY_START) % 1440
+    return "%02d:%02d" % (m // 60, m % 60)
+
+
+def median(values):
+    s = sorted(values)
+    if not s:
         return None
-    d = devs[mac]
+    mid = len(s) // 2
+    return s[mid] if len(s) % 2 else (s[mid - 1] + s[mid]) / 2.0
+
+
+def usage_summary(mins, night_from, night_to):
+    """Resumo de um conjunto de minutos de uso {minuto: (cat, app)}: categorias, horários, rotina e recordes."""
+    cats, apps, hours, by_day, work_day = Counter(), Counter(), [0] * 24, {}, {}
+    night = 0
+    for minute, (cat, app) in mins.items():
+        t = datetime.fromtimestamp(minute * 60)
+        cats[cat] += 1
+        if app:
+            apps[app] += 1
+        hours[t.hour] += 1
+        if night_from <= t.hour < night_to:
+            night += 1
+        shifted = t - timedelta(minutes=DAY_START)
+        mod = shifted.hour * 60 + shifted.minute
+        by_day.setdefault(shifted.date(), []).append(mod)
+        if cat == "work":
+            work_day.setdefault(shifted.date(), []).append(mod)
+    starts = [min(v) for v in by_day.values()]
+    ends = [max(v) for v in by_day.values()]
+    streak, best = None, (0, None)
+    for m in sorted(mins):
+        if streak and m - streak[1] <= STREAK_GAP:
+            streak = (streak[0], m)
+        else:
+            streak = (m, m)
+        length = streak[1] - streak[0] + 1
+        if length > best[0]:
+            best = (length, streak[0] * 60)
+    peak = max(range(24), key=lambda h: hours[h]) if mins else None
+    return {
+        "minutes": len(mins), "days_active": len(by_day),
+        "per_day": len(mins) / float(len(by_day)) if by_day else 0,
+        "categories": [{"cat": c, "minutes": n} for c, n in cats.most_common()],
+        "apps": [{"app": a, "minutes": n} for a, n in apps.most_common(5)],
+        "hours": hours, "peak_hour": peak, "night_minutes": night,
+        "start": clock(median(starts)) if starts else None, "end": clock(median(ends)) if ends else None,
+        "start_m": median(starts), "end_m": median(ends), "latest_m": max(ends) if ends else None,
+        "work_minutes": cats.get("work", 0), "work_days": len(work_day),
+        "work_start": clock(median([min(v) for v in work_day.values()])) if work_day else None,
+        "work_end": clock(median([max(v) for v in work_day.values()])) if work_day else None,
+        "streak_minutes": best[0], "streak_start": best[1],
+    }
+
+
+# Títulos da casa: cada um vai para quem tem o maior (ou menor) valor, se houver pelo menos duas pessoas com uso.
+TITLES = [
+    ("work", lambda p: p["work_minutes"], 30, max),
+    ("social", lambda p: p["cat_minutes"].get("social", 0), 30, max),
+    ("video", lambda p: p["cat_minutes"].get("video", 0), 30, max),
+    ("games", lambda p: p["cat_minutes"].get("games", 0), 15, max),
+    ("owl", lambda p: p["latest_m"], 0, max),
+    ("early", lambda p: p["start_m"], 0, min),
+    ("marathon", lambda p: p["streak_minutes"], 60, max),
+    ("tracked", lambda p: p["blocked_pct"] if p["queries"] >= 500 else None, 0, max),
+    ("home", lambda p: p["home_s"], 3600, max),
+]
+
+
+def award_titles(people):
+    active = [p for p in people if p["minutes"]]
+    if len(active) < 2:
+        return
+    for code, value, minimum, pick in TITLES:
+        cands = [(value(p), p) for p in active if value(p) is not None and (pick is min or value(p) >= minimum)]
+        if cands:
+            best = pick(cands, key=lambda c: c[0])[1]
+            best["titles"].append(code)
+
+
+def home_seconds(db, macs, t0, t1, now):
+    """Tempo em casa: união das sessões dos celulares e relógios da pessoa (eles saem de casa junto com ela)."""
+    if not macs:
+        return 0
+    rows = db.execute("SELECT start_ts, COALESCE(end_ts, ?) FROM presence WHERE mac IN (%s) AND COALESCE(end_ts, ?) > ? "
+                      "AND start_ts < ?" % marks(macs), [now] + macs + [now, t0, t1]).fetchall()
+    return sum(b - a for a, b in merge_intervals([(max(a, t0), min(b, t1)) for a, b in rows if b > a]))
+
+
+def people_summary(db, model, t0, t1, days, cfg):
+    """Estatísticas por pessoa no intervalo, com os títulos da casa e os aparelhos ainda sem dono."""
+    m0, m1 = int(t0 // 60), int(t1 // 60) + 1
+    act = activity_by(db, model, m0, m1, by="person")
+    nf, nt = int(cfg["night_from"]), int(cfg["night_to"])
+    now = time.time()
+    mains_by_person = {}
+    for c in model.groups:
+        d = model.devs[c]
+        if not d["hidden"] and d["person_id"] in model.people:
+            mains_by_person.setdefault(d["person_id"], []).append(c)
+    out = []
+    for pid, name in model.people.items():
+        mains = mains_by_person.get(pid, [])
+        macs = model.macs(mains)
+        mins = act.get(pid, {})
+        s = usage_summary(mins, nf, nt)
+        q, b = query_totals(db, macs, days)
+        mobile = model.macs([c for c in mains if model.devs[c]["kind"] in ("phone", "watch")])
+        apps = top_apps(db, macs, days, mins.values(), limit=5)
+        s.update(id=pid, name=name, queries=q, blocked=b, blocked_pct=100.0 * b / q if q else 0,
+                 cat_minutes=dict((c["cat"], c["minutes"]) for c in s["categories"]),
+                 apps=apps, sites=top_domains(db, model, macs, days, limit=5, exclude=("system", "ads", "other")),
+                 home_s=home_seconds(db, mobile, t0, t1, now) if mobile else None,
+                 devices=[{"mac": c, "name": name_of(model.devs[c]), "kind": model.devs[c]["kind"],
+                           "online": model.info(c)["online"]} for c in mains],
+                 titles=[])
+        out.append(s)
+    award_titles(out)
+    out.sort(key=lambda p: -p["minutes"])
+    unassigned = [{"mac": c, "name": name_of(model.devs[c]), "kind": model.devs[c]["kind"]}
+                  for c in model.groups if not model.devs[c]["hidden"] and model.devs[c]["person_id"] not in model.people]
+    return out, unassigned
+
+
+def people_stats(db, key, cfg):
+    t0, t1, days = period_range(key)
+    model = Model(db)
+    people, unassigned = people_summary(db, model, t0, t1, days, cfg)
+    return {"period": key, "from": t0, "to": t1, "days": days, "people": people, "unassigned": unassigned}
+
+
+def devices_list(db, cfg):
+    t0, t1, days = period_range("today")
+    model = Model(db)
+    act = activity_by(db, model, int(t0 // 60))
+    queries = {}
+    for mac, q, b in db.execute("SELECT mac, SUM(queries), SUM(blocked) FROM hourly WHERE day=? GROUP BY mac",
+                                (days[0],)).fetchall():
+        tot = queries.setdefault(model.canon.get(mac, mac), [0, 0])
+        tot[0] += q or 0
+        tot[1] += b or 0
+    out = []
+    for c in model.groups:
+        mins = act.get(c, {})
+        cats = Counter(cat for cat, _ in mins.values())
+        apps = Counter(app for _, app in mins.values() if app)
+        q, b = queries.get(c, (0, 0))
+        out.append(dict(model.info(c), today_minutes=len(mins), today_queries=q, today_blocked=b,
+                        top_cat=cats.most_common(1)[0][0] if cats else None,
+                        top_app=apps.most_common(1)[0][0] if apps else None))
+    out.sort(key=lambda x: (x["hidden"], not x["online"], -x["today_minutes"], -(x["last_seen"] or 0)))
+    return out
+
+
+def overview(db, key, cfg):
+    t0, t1, days = period_range(key)
+    model = Model(db)
+    act = activity_by(db, model, int(t0 // 60))
+    nf, nt = int(cfg["night_from"]), int(cfg["night_to"])
+    usage, night, hours, cats = [], [], [0] * 24, Counter()
+    all_minutes = {}
+    for c, mins in act.items():
+        d = model.devs[c]
+        n_night = 0
+        for minute, (cat, app) in mins.items():
+            h = datetime.fromtimestamp(minute * 60).hour
+            hours[h] += 1
+            cats[cat] += 1
+            n_night += 1 if nf <= h < nt else 0
+            all_minutes[(c, minute)] = (cat, app)
+        usage.append({"mac": c, "name": name_of(d), "kind": d["kind"], "minutes": len(mins)})
+        if n_night:
+            night.append({"mac": c, "name": name_of(d), "kind": d["kind"], "minutes": n_night})
+    usage.sort(key=lambda u: -u["minutes"])
+    night.sort(key=lambda u: -u["minutes"])
+    macs = [m for m in model.devs if model.counted(m)]
+    q, b = query_totals(db, macs, days)
+    new_devices = [{"mac": c, "name": name_of(model.devs[c]), "kind": model.devs[c]["kind"],
+                    "first_seen": model.info(c)["first_seen"]}
+                   for c in model.groups if not model.devs[c]["hidden"] and (model.info(c)["first_seen"] or 0) >= t0]
+    events = []
+    for ts, k, mac, detail in db.execute("SELECT ts, kind, mac, detail FROM events WHERE ts >= ? ORDER BY ts DESC LIMIT 30",
+                                         (t0,)).fetchall():
+        d = model.main(mac)
+        events.append({"ts": ts, "kind": k, "mac": model.canon.get(mac, mac), "detail": detail,
+                       "name": name_of(d) if d else (detail or mac)})
+    return {"period": key, "from": t0, "to": t1, "days": days,
+            "totals": {"queries": q, "blocked": b, "active_devices": len(usage), "new_devices": len(new_devices),
+                       "minutes": sum(u["minutes"] for u in usage)},
+            "usage": usage, "categories": [{"cat": c, "minutes": n} for c, n in cats.most_common()], "hours": hours,
+            "night": night, "night_from": nf, "night_to": nt,
+            "apps": top_apps(db, macs, days, all_minutes.values()),
+            "top_domains": top_domains(db, model, macs, days), "blocked": top_domains(db, model, macs, days, "blocked", 10, ()),
+            "new_devices": new_devices, "events": events}
+
+
+def device_detail(db, mac, key, cfg):
+    model = Model(db)
+    if mac not in model.devs:
+        return None
+    c = model.canon[mac]
+    members = model.groups[c]
+    d = model.info(c)
     t0, t1, days = period_range(key)
     now = time.time()
     m0 = int(t0 // 60)
-    ph = in_days(days)
-    sessions = [(s, e if e is not None else (d["last_seen"] if not d["online"] else now)) for s, e in db.execute(
-        "SELECT start_ts, end_ts FROM presence WHERE mac=? AND COALESCE(end_ts, ?) > ? ORDER BY start_ts",
-        (mac, now, t0)).fetchall()]
-    minutes = [r[0] for r in db.execute("SELECT minute FROM activity WHERE mac=? AND minute >= ? ORDER BY minute",
-                                        (mac, m0)).fetchall()]
+    sess = []
+    for s, e, mm in db.execute("SELECT start_ts, end_ts, mac FROM presence WHERE mac IN (%s) AND COALESCE(end_ts, ?) > ?"
+                               % marks(members), members + [now, t0]).fetchall():
+        if e is None:
+            e = now if model.devs[mm]["online"] else (model.devs[mm]["last_seen"] or s)
+        sess.append((s, e))
+    sessions = merge_intervals(sess)
+    mins = activity_by(db, model, m0, only=set(members)).get(c, {})
+    minutes = sorted(mins)
     day_rows = []
-    for i, day in enumerate(days):
+    for day in days:
         ds = datetime.strptime(day, "%Y-%m-%d").timestamp()
         de = (datetime.strptime(day, "%Y-%m-%d") + timedelta(days=1)).timestamp()
         on = [[max(s, ds), min(e, de)] for s, e in sessions if e > ds and s < de]
@@ -1335,21 +1737,72 @@ def device_detail(db, mac, key, cfg):
     hours = [0] * 24
     for m in minutes:
         hours[datetime.fromtimestamp(m * 60).hour] += 1
-    cats = [{"cat": c, "minutes": n} for c, n in db.execute(
-        "SELECT cat, COUNT(*) AS n FROM activity WHERE mac=? AND minute >= ? GROUP BY cat ORDER BY n DESC",
-        (mac, m0)).fetchall()]
-    domains = [{"domain": dm, "cat": c, "queries": q, "blocked": b} for dm, c, q, b in db.execute(
-        "SELECT domain, cat, SUM(queries) AS q, SUM(blocked) FROM domains WHERE mac=? AND day IN (%s) "
-        "GROUP BY domain ORDER BY q DESC LIMIT 40" % ph, [mac] + days).fetchall()]
-    blocked = [{"domain": dm, "cat": c, "blocked": b} for dm, c, b in db.execute(
-        "SELECT domain, cat, SUM(blocked) AS b FROM domains WHERE mac=? AND day IN (%s) AND blocked > 0 "
-        "GROUP BY domain ORDER BY b DESC LIMIT 15" % ph, [mac] + days).fetchall()]
-    q = db.execute("SELECT COALESCE(SUM(queries), 0), COALESCE(SUM(blocked), 0) FROM hourly WHERE mac=? AND day IN (%s)"
-                   % ph, [mac] + days).fetchone()
-    return {"device": dict(d, name=name_of(d), private_mac=is_private_mac(mac)), "period": key, "from": t0, "to": t1,
-            "now": now, "totals": {"minutes": len(minutes), "online_s": sum(r["online_s"] for r in day_rows),
-                                   "queries": q[0], "blocked": q[1]},
-            "days": day_rows, "hours": hours, "categories": cats, "domains": domains, "blocked": blocked}
+    cats = Counter(cat for cat, _ in mins.values())
+    q, b = query_totals(db, members, days)
+    # aparelhos com que este pode ser juntado: os outros principais
+    candidates = sorted(({"mac": o, "name": name_of(model.devs[o])} for o in model.groups if o != c),
+                        key=lambda x: x["name"].lower())
+    return {"device": dict(d, is_member=mac != c), "period": key, "from": t0, "to": t1, "now": now,
+            "totals": {"minutes": len(minutes), "online_s": sum(r["online_s"] for r in day_rows), "queries": q, "blocked": b},
+            "days": day_rows, "hours": hours, "categories": [{"cat": k, "minutes": n} for k, n in cats.most_common()],
+            "apps": top_apps(db, members, days, mins.values(), limit=6),
+            "domains": device_domains(db, members, days),
+            "blocked": top_domains(db, model, members, days, "blocked", 15, ()),
+            "people": [{"id": i, "name": n} for i, n in model.people.items()],
+            "candidates": candidates}
+
+
+def device_domains(db, macs, days, limit=40):
+    return [{"domain": dm, "cat": c, "queries": q, "blocked": b} for dm, c, q, b in db.execute(
+        "SELECT domain, cat, SUM(queries) AS q, SUM(blocked) FROM domains WHERE mac IN (%s) AND day IN (%s) "
+        "GROUP BY domain ORDER BY q DESC LIMIT %d" % (marks(macs), marks(days), limit), macs + days).fetchall()]
+
+
+def wrapped(db, month, cfg):
+    """O mês da casa em números: totais, recordes, apps e o resumo de cada pessoa."""
+    t0, t1, days = month_range(month)
+    model = Model(db)
+    m0, m1 = int(t0 // 60), int(t1 // 60) + 1
+    act = activity_by(db, model, m0, m1)
+    macs = [m for m in model.devs if model.counted(m)]
+    house = {}
+    for c, mins in act.items():
+        for minute, v in mins.items():
+            house[(c, minute)] = v
+    by_day, hours, cats = Counter(), [0] * 24, Counter()
+    for (c, minute), (cat, app) in house.items():
+        t = datetime.fromtimestamp(minute * 60)
+        by_day[t.strftime("%Y-%m-%d")] += 1
+        hours[t.hour] += 1
+        cats[cat] += 1
+    q, b = query_totals(db, macs, days)
+    sites = db.execute("SELECT COUNT(DISTINCT domain) FROM domains WHERE day IN (%s) AND mac IN (%s)"
+                       % (marks(days), marks(macs)), days + macs).fetchone()[0] if macs else 0
+    people, _ = people_summary(db, model, t0, t1, days, cfg)
+    busiest = by_day.most_common(1)[0] if by_day else None
+    new = [name_of(model.devs[c]) for c in model.groups
+           if not model.devs[c]["hidden"] and (model.info(c)["first_seen"] or 0) >= t0]
+    records = {}
+    with_streak = [p for p in people if p["streak_minutes"]]
+    if with_streak:
+        p = max(with_streak, key=lambda x: x["streak_minutes"])
+        records["streak"] = {"name": p["name"], "minutes": p["streak_minutes"], "ts": p["streak_start"]}
+    late = [p for p in people if p["latest_m"] is not None]
+    if late:
+        p = max(late, key=lambda x: x["latest_m"])
+        records["latest"] = {"name": p["name"], "time": clock(p["latest_m"])}
+    months = [r[0] for r in db.execute("SELECT DISTINCT substr(day, 1, 7) FROM hourly ORDER BY 1").fetchall()]
+    net = internet_status(cfg)
+    return {"month": datetime.fromtimestamp(t0).strftime("%Y-%m"), "from": t0, "to": t1, "days": len(days),
+            "months": months, "minutes": len(house), "queries": q, "blocked": b, "sites": sites,
+            "peak_hour": max(range(24), key=lambda h: hours[h]) if house else None, "hours": hours,
+            "busiest_day": {"day": busiest[0], "minutes": busiest[1]} if busiest else None,
+            "categories": [{"cat": c, "minutes": n} for c, n in cats.most_common(6)],
+            "apps": top_apps(db, macs, days, house.values(), limit=5),
+            "tracker": (top_domains(db, model, macs, days, "blocked", 1, ()) or [None])[0],
+            "new_devices": new, "records": records, "people": people,
+            "internet": {"outages": (net.get("d30") or {}).get("count"), "down_s": (net.get("d30") or {}).get("down_s")}
+            if net.get("ok") else None}
 
 
 def internet_status(cfg):
@@ -1364,7 +1817,7 @@ def internet_status(cfg):
         return {"enabled": True, "ok": False}
     speed = (st.get("speed") or {}).get("last") or {}
     return {"enabled": True, "ok": True, "state": st.get("state"), "since": st.get("since"),
-            "h24": gl.get("h24"), "d7": gl.get("d7"), "port": urlparse(url).port,
+            "h24": gl.get("h24"), "d7": gl.get("d7"), "d30": gl.get("d30"), "port": urlparse(url).port,
             "speed": {"ts": speed.get("ts"), "down": speed.get("down"), "up": speed.get("up")} if speed else None}
 
 
@@ -1379,6 +1832,8 @@ STATIC_FILES = {
     "/common.js": ("common.js", "application/javascript; charset=utf-8"),
     "/app.js": ("app.js", "application/javascript; charset=utf-8"),
     "/device.js": ("device.js", "application/javascript; charset=utf-8"),
+    "/wrapped": ("wrapped.html", "text/html; charset=utf-8"),
+    "/wrapped.js": ("wrapped.js", "application/javascript; charset=utf-8"),
     "/i18n.js": ("i18n.js", "application/javascript; charset=utf-8"),
     "/manifest.webmanifest": ("manifest.webmanifest", "application/manifest+json; charset=utf-8"),
     "/icon.svg": ("icon.svg", "image/svg+xml"),
@@ -1417,17 +1872,91 @@ def host_allowed(host_header, extra):
     return host == "localhost" or host.endswith(".local") or host in [h.lower() for h in extra]
 
 
+def clean_text(value, size):
+    return re.sub(r"[\x00-\x1f\x7f]", "", str(value or "")).strip()[:size] or None
+
+
 def parse_device_update(body):
-    """Corpo do POST /api/device → {'mac', 'nickname', 'kind'} validado (ValueError se inválido)."""
+    """Corpo do POST /api/device → só os campos enviados, validados (ValueError se inválido):
+    mac (obrigatório), nickname, kind, person_id (número ou null), parent (MAC ou null) e hidden."""
     data = json.loads(body.decode("utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError("body")
     mac = norm_mac(str(data.get("mac") or ""))
     if not mac or not MAC_RE.match(mac):
         raise ValueError("mac")
-    nickname = re.sub(r"[\x00-\x1f\x7f]", "", str(data.get("nickname") or "")).strip()[:40] or None
-    kind = data.get("kind") or None
-    if kind is not None and kind not in KINDS:
-        raise ValueError("kind")
-    return {"mac": mac, "nickname": nickname, "kind": kind}
+    out = {"mac": mac}
+    if "nickname" in data:
+        out["nickname"] = clean_text(data["nickname"], 40)
+    if "kind" in data:
+        kind = data["kind"] or None
+        if kind is not None and kind not in KINDS:
+            raise ValueError("kind")
+        out["kind"] = kind
+    if "person_id" in data:
+        pid = data["person_id"]
+        if pid is not None and (isinstance(pid, bool) or not isinstance(pid, int) or pid <= 0):
+            raise ValueError("person_id")
+        out["person_id"] = pid
+    if "parent" in data:
+        parent = norm_mac(str(data["parent"])) if data["parent"] else None
+        if data["parent"] and (not parent or parent == mac):
+            raise ValueError("parent")
+        out["parent"] = parent
+    if "hidden" in data:
+        out["hidden"] = 1 if data["hidden"] else 0
+    return out
+
+
+def parse_person_update(body):
+    """Corpo do POST /api/person → {'id', 'name', 'delete'}: sem id cria, com id renomeia ou apaga."""
+    data = json.loads(body.decode("utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError("body")
+    pid = data.get("id")
+    if pid is not None and (isinstance(pid, bool) or not isinstance(pid, int) or pid <= 0):
+        raise ValueError("id")
+    delete = bool(data.get("delete"))
+    name = clean_text(data.get("name"), 30)
+    if not delete and not name:
+        raise ValueError("name")
+    if delete and pid is None:
+        raise ValueError("id")
+    return {"id": pid, "name": name, "delete": delete}
+
+
+def update_device(db, upd):
+    """Aplica a edição de um aparelho. Juntar a outro: os MACs que já estavam juntados a este vão junto
+    (fica sempre um nível só: principal → MACs)."""
+    mac = upd["mac"]
+    if not db.execute("SELECT 1 FROM devices WHERE mac=?", (mac,)).fetchone():
+        return "not_found"
+    if upd.get("person_id") is not None and not db.execute("SELECT 1 FROM people WHERE id=?", (upd["person_id"],)).fetchone():
+        return "invalid"
+    if upd.get("parent"):
+        row = db.execute("SELECT parent FROM devices WHERE mac=?", (upd["parent"],)).fetchone()
+        if not row:
+            return "invalid"
+        target = row[0] or upd["parent"]          # juntar a um MAC juntado = juntar ao principal dele
+        if target == mac:
+            return "invalid"
+        upd["parent"] = target
+        db.execute("UPDATE devices SET parent=? WHERE parent=?", (target, mac))
+    for col in ("nickname", "kind", "person_id", "parent", "hidden"):
+        if col in upd:
+            db.execute("UPDATE devices SET %s=? WHERE mac=?" % col, (upd[col], mac))
+    return None
+
+
+def update_person(db, upd):
+    if upd["delete"]:
+        db.execute("UPDATE devices SET person_id=NULL WHERE person_id=?", (upd["id"],))
+        db.execute("DELETE FROM people WHERE id=?", (upd["id"],))
+        return upd["id"]
+    if upd["id"] is None:
+        return db.execute("INSERT INTO people(name, created) VALUES(?, ?)", (upd["name"], time.time())).lastrowid
+    db.execute("UPDATE people SET name=? WHERE id=?", (upd["name"], upd["id"]))
+    return upd["id"]
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -1492,6 +2021,10 @@ class Handler(BaseHTTPRequestHandler):
                     mac = norm_mac(q.get("mac", [""])[0])
                     detail = device_detail(db, mac, period, self.cfg) if mac else None
                     return self.json(detail) if detail else self.json({"error": "not found"}, 404)
+                if u.path == "/api/people":
+                    return self.json(people_stats(db, period, self.cfg))
+                if u.path == "/api/wrapped":
+                    return self.json(wrapped(db, q.get("month", [""])[0], self.cfg))
                 if u.path == "/api/internet":
                     return self.json(internet_status(self.cfg))
                 if u.path == "/api/config":
@@ -1508,7 +2041,7 @@ class Handler(BaseHTTPRequestHandler):
         if not self.check_host():
             return
         u = urlparse(self.path)
-        if u.path not in ("/api/device", "/api/test-notify"):
+        if u.path not in ("/api/device", "/api/person", "/api/test-notify"):
             return self.send(404, "not found", "text/plain; charset=utf-8")
         # Cabeçalho próprio força preflight de CORS (que não respondemos): outro site não consegue disparar.
         if self.headers.get("X-Who-Is-Home") != "1":
@@ -1519,19 +2052,24 @@ class Handler(BaseHTTPRequestHandler):
             length = int(self.headers.get("Content-Length") or 0)
             if not 0 < length <= 2048:
                 raise ValueError("length")
-            upd = parse_device_update(self.rfile.read(length))
+            body = self.rfile.read(length)
+            upd = parse_device_update(body) if u.path == "/api/device" else parse_person_update(body)
         except (ValueError, TypeError, AttributeError):
             return self.json({"ok": False, "code": "invalid"}, 400)
         db = connect()
         try:
             with WRITE:
-                cur = db.execute("UPDATE devices SET nickname=?, kind=COALESCE(?, kind) WHERE mac=?",
-                                 (upd["nickname"], upd["kind"], upd["mac"]))
+                if u.path == "/api/person":
+                    pid = update_person(db, upd)
+                    db.commit()
+                    return self.json({"ok": True, "id": pid})
+                err = update_device(db, upd)
+                if err:
+                    db.rollback()
+                    return self.json({"ok": False, "code": err}, 404 if err == "not_found" else 400)
                 db.commit()
         finally:
             db.close()
-        if not cur.rowcount:
-            return self.json({"ok": False, "code": "not_found"}, 404)
         return self.json({"ok": True})
 
     def post_test(self):
@@ -1553,14 +2091,20 @@ class Handler(BaseHTTPRequestHandler):
             self.send(200, f.read(), ctype)
 
 
+class Server(ThreadingHTTPServer):
+    # O padrão do Python é uma fila de 5 conexões: o navegador abre a página com ~10 pedidos de uma vez e o
+    # macOS recusa o que passa disso (a página abria sem CSS de vez em quando).
+    request_queue_size = 128
+    daemon_threads = True
+
+
 def serve(cfg, collector=None, notifier=None):
     host, ip = local_hostname(), local_ip()
     Handler.collector, Handler.notifier, Handler.cfg = collector, notifier, cfg
     Handler.info = {"host": host, "ip": ip}
     name = socket.gethostname().lower()
     Handler.own_names = {name, name.split(".")[0]}
-    server = ThreadingHTTPServer((cfg["bind"], cfg["port"]), Handler)
-    server.daemon_threads = True
+    server = Server((cfg["bind"], cfg["port"]), Handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     for addr in ("localhost", host, ip):
         if addr:

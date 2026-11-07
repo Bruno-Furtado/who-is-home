@@ -4,7 +4,7 @@
 //   python3 tools/demo.py          # em outro terminal (porta 8767)
 //   node tools/capture.mjs         # tudo; ou: node tools/capture.mjs shots|gif|cover
 //
-// Gera docs/<idioma>/{cover.png, demo.gif, dashboard.png, device.png} para en, pt e zh.
+// Gera docs/<idioma>/{cover.png, demo.gif, dashboard.png, device.png, wrapped.png} para en, pt e zh.
 import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
@@ -90,6 +90,11 @@ for (const lang of LANGS) {
     const end = await js(`(() => { const r = document.querySelector("#timeline").getBoundingClientRect(); return r.bottom + scrollY; })()`);
     await shot(path.join(OUT, "device.png"), { x: 0, y: 0, width: 1280, height: Math.ceil(end + 24) });
 
+    // Wrapped do mês: do topo até os recordes
+    await go(BASE + "/wrapped", prefs({ theme: "dark" }));
+    const wEnd = await js(`(() => { const c = [...document.querySelectorAll("#wr .wr-card")]; const r = c[Math.min(c.length, 7) - 1].getBoundingClientRect(); return r.bottom + scrollY; })()`);
+    await shot(path.join(OUT, "wrapped.png"), { x: 0, y: 0, width: 1280, height: Math.ceil(wEnd + 28) });
+
     // celular claro e escuro (usados na capa)
     await viewport(390, 844, 3, true);
     for (const theme of ["light", "dark"]) {
@@ -115,6 +120,8 @@ for (const lang of LANGS) {
     await go(BASE + "/", prefs({ theme: "light" }), 2500);
     await js("for (let i = 1; i < 10000; i++) clearInterval(i)");    // sem atualização automática no meio do GIF
     await hold(10);                                                    // agora + hoje
+    await scroll((await top("#people")) - 70);
+    await hold(14);                                                    // pessoas
     await scroll((await top("#devices")) - 70);
     await hold(12);                                                    // aparelhos
     await scroll((await top("#usage")) - 120);

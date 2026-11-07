@@ -1,5 +1,5 @@
 "use strict";
-// Painel principal: quem está online, aparelhos e relatório do período.
+// Painel principal: quem está online, pessoas, aparelhos e relatório do período.
 const { t, $, esc, mins, num } = WH;
 WH.applyStatic();
 WH.mountLangMenu($("#lang"), $("#lang-menu"));
@@ -11,6 +11,8 @@ let filter = WH.store.get("filter", "all");
 let sort = WH.store.get("sort", "usage");
 let devices = [];
 let cfg = {};
+let editing = null;          // id da pessoa sendo editada ('new' = criando)
+let peopleData = null;
 
 const devHref = (mac) => "/device?mac=" + encodeURIComponent(mac);
 
@@ -63,7 +65,9 @@ function renderNet(n) {
 /* ---------- aparelhos ---------- */
 function devSub(d) {
   const bits = [esc(d.ip || "")];
-  if (d.private_mac) bits.push(`<span class="badge" data-tip="${esc(t("dev.privateHint"))}">${esc(t("dev.private"))}</span>`);
+  if (d.members && d.members.length) bits.push(`<span class="badge infra" data-tip="${esc(t("dev.linksHint", { n: d.members.length + 1 }))}">+${d.members.length}</span>`);
+  if (d.hidden) bits.push(`<span class="badge infra" data-tip="${esc(t("dev.infraHint"))}">${esc(t("dev.infra"))}</span>`);
+  else if (d.private_mac) bits.push(`<span class="badge" data-tip="${esc(t("dev.privateHint"))}">${esc(t("dev.private"))}</span>`);
   return bits.join(" ");
 }
 
@@ -73,7 +77,7 @@ function renderDevices() {
   if (filter === "offline") list = list.filter((d) => !d.online);
   if (sort === "name") list.sort((a, b) => a.name.localeCompare(b.name, WH.locale));
   else if (sort === "recent") list.sort((a, b) => (b.last_seen || 0) - (a.last_seen || 0));
-  else list.sort((a, b) => (b.online - a.online) || (b.today_minutes - a.today_minutes) || ((b.last_seen || 0) - (a.last_seen || 0)));
+  else list.sort((a, b) => (a.hidden - b.hidden) || (b.online - a.online) || (b.today_minutes - a.today_minutes) || ((b.last_seen || 0) - (a.last_seen || 0)));
   const online = devices.filter((d) => d.online).length;
   $("#dev-desc").textContent = t("dev.desc", { n: devices.length, on: online });
   if (!list.length) { $("#devices").innerHTML = `<div class="card empty"><b>${esc(t("dev.none"))}</b>${esc(t("dev.noneHint"))}</div>`; return; }
@@ -81,8 +85,8 @@ function renderDevices() {
   const now = Date.now() / 1000;
   $("#devices").innerHTML = list.map((d) => {
     const status = d.online ? `<span class="dot on"></span>${esc(t("dev.isOnline"))}` : `<span class="dot"></span>${esc(t("dev.seen", { ago: WH.ago(d.last_seen, now) }))}`;
-    const top = d.top_cat ? WH.catChip(d.top_cat) : "";
-    return `<a class="card dev${d.online ? " on" : ""}" href="${devHref(d.mac)}">
+    const top = d.person ? `<span class="who">${WH.avatar(d.person, "sm")}${esc(d.person)}</span>` : d.top_cat ? WH.catChip(d.top_cat) : "";
+    return `<a class="card dev${d.online ? " on" : ""}${d.hidden ? " infra" : ""}" href="${devHref(d.mac)}">
       <span class="dev-ic">${WH.kindIcon(d.kind)}</span>
       <span class="dev-main"><b>${esc(d.name)}</b><small>${devSub(d)}</small><small class="dev-st">${status}</small></span>
       <span class="dev-use"><b>${mins(d.today_minutes)}</b><small>${esc(t("dev.today"))}</small>
@@ -108,9 +112,10 @@ function renderReport(o) {
   })), mins);
   $("#cats").innerHTML = WH.catsHTML(o.categories);
   $("#hours").innerHTML = WH.hoursHTML(o.hours);
+  $("#apps").innerHTML = appsHTML(o.apps);
   $("#sites").innerHTML = domainList(o.top_domains, "queries");
   $("#blocked").innerHTML = domainList(o.blocked, "blocked");
-  $("#night-hint").textContent = t("rep.nightHint", { a: o.night_from, b: o.night_to });
+  $("#night-title").textContent = t("rep.nightTitle", { a: o.night_from, b: o.night_to });
   $("#night").innerHTML = o.night.length ? WH.barsHTML(o.night.map((u) => ({
     label: u.name, value: u.minutes, icon: `<span class="mini-ic">${WH.kindIcon(u.kind)}</span>`, href: devHref(u.mac), color: "var(--accent-2)",
   })), mins) : `<div class="empty">${esc(t("rep.nightNone"))}</div>`;
@@ -118,6 +123,81 @@ function renderReport(o) {
     <a class="ev" href="${devHref(e.mac)}"><span class="dot new"></span><span><b>${esc(t("ev." + e.kind, { name: e.name }))}</b><small>${esc(WH.dt(e.ts))} · ${esc(e.detail || "")}</small></span></a>`).join("")}</div>`
     : `<div class="empty">${esc(t("rep.eventsNone"))}</div>`;
 }
+
+// Apps: por minutos quando já há (dados novos), senão por consultas.
+function appsHTML(apps) {
+  if (!apps || !apps.length) return `<div class="empty">${esc(t("empty.period"))}</div>`;
+  const byMin = apps.some((a) => a.minutes);
+  const val = (a) => (byMin ? a.minutes : a.queries);
+  return WH.barsHTML(apps.filter(val).slice(0, 8).map((a) => ({ label: a.app, value: val(a), color: "var(--accent-2)" })), byMin ? mins : num);
+}
+
+/* ---------- pessoas ---------- */
+const PENCIL = '<svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M14 6l4 4"/></svg>';
+
+function personCard(p, days) {
+  if (editing === p.id) return personForm(p);
+  const stat = (label, value, tip) => `<div data-tip="${esc(tip)}"><span>${esc(label)}</span><b>${value}</b></div>`;
+  const routine = p.start ? `${p.start}–${p.end}` : "—";   // tile largo (ocupa 2 colunas no celular)
+  const apps = (p.apps || []).filter((a) => a.minutes || a.queries).slice(0, 3).map((a) => esc(a.app));
+  return `<div class="card person">
+    <div class="p-head">${WH.avatar(p.name)}<b>${esc(p.name)}</b>
+      <button class="icon-btn sm" data-edit="${p.id}" data-i18n-title="pp.edit" title="${esc(t("pp.edit"))}">${PENCIL}</button></div>
+    <div class="p-hours"><b>${mins(p.minutes)}</b><span>${days > 1 && p.days_active ? esc(t("pp.perDay", { v: mins(p.per_day) })) : ""}</span></div>
+    ${WH.catStrip(p.categories)}
+    ${p.titles.length ? `<div class="titles">${p.titles.slice(0, 3).map(WH.titleChip).join("")}</div>` : ""}
+    <div class="p-stats">
+      ${stat("💼 " + t("pp.work"), mins(p.work_minutes), p.work_start ? t("pp.workHint", { a: p.work_start, b: p.work_end }) : t("pp.work"))}
+      ${p.home_s != null ? stat("🏠 " + t("pp.home"), WH.secs(p.home_s), t("pp.homeHint")) : stat("🌙 " + t("pp.night"), mins(p.night_minutes), t("pp.nightHint"))}
+      ${stat("🕘 " + t("pp.routine"), routine, t("pp.routineHint"))}
+    </div>
+    ${apps.length ? `<div class="p-apps">${apps.map((a) => `<b>${a}</b>`).join(" · ")}</div>` : ""}
+  </div>`;
+}
+
+function personForm(p) {
+  return `<div class="card person"><form class="p-edit" data-form="${p ? p.id : "new"}">
+    <input name="name" maxlength="30" value="${p ? esc(p.name) : ""}" placeholder="${esc(t("pp.name"))}" autocomplete="off">
+    <button class="btn primary" type="submit">${esc(t("edit.save"))}</button>
+    ${p ? `<button class="btn" type="button" data-del="${p.id}">${esc(t("pp.delete"))}</button>` : ""}
+    <button class="btn" type="button" data-cancel>${esc(t("edit.cancel"))}</button>
+  </form></div>`;
+}
+
+function renderPeople(x) {
+  peopleData = x;
+  const days = x.days.length;
+  $("#pp-desc").textContent = days === 1 ? t("rep.descToday") : t("rep.descDays", { n: days });
+  const cards = x.people.map((p) => personCard(p, days));
+  cards.push(editing === "new" ? personForm(null) : `<button class="card add-card" data-add>+ ${esc(t("pp.add"))}</button>`);
+  $("#people").innerHTML = cards.join("");
+  const un = $("#unassigned");
+  un.hidden = !x.people.length || !x.unassigned.length;
+  un.innerHTML = `${esc(t("pp.unassigned"))} ${x.unassigned.map((d) => `<a href="${devHref(d.mac)}">${esc(d.name)}</a>`).join(", ")}`;
+  const input = $("#people input[name=name]");
+  if (input) input.focus();
+}
+
+$("#people").addEventListener("click", async (e) => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  if (b.dataset.add !== undefined) { editing = "new"; return renderPeople(peopleData); }
+  if (b.dataset.edit) { editing = Number(b.dataset.edit); return renderPeople(peopleData); }
+  if (b.dataset.cancel !== undefined) { editing = null; return renderPeople(peopleData); }
+  if (b.dataset.del && confirm(t("pp.confirmDelete"))) {
+    await WH.post("/api/person", { id: Number(b.dataset.del), delete: true });
+    editing = null;
+    loadAll();
+  }
+});
+$("#people").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const f = e.target, name = f.elements.name.value.trim();
+  if (!name) return;
+  const id = f.dataset.form === "new" ? null : Number(f.dataset.form);
+  const r = await WH.post("/api/person", { id, name });
+  if (r.ok) { editing = null; loadAll(); }
+});
 
 function domainList(rows, field) {
   if (!rows.length) return `<div class="empty">${esc(t(field === "blocked" ? "rep.blockedNone" : "empty.period"))}</div>`;
@@ -137,7 +217,11 @@ async function loadTop() {
   renderDevices();
 }
 async function loadToday() { renderToday(await WH.get("/api/overview?period=today")); }
-async function loadReport() { renderReport(await WH.get("/api/overview?period=" + period)); }
+async function loadReport() {
+  const [o, p] = await Promise.all([WH.get("/api/overview?period=" + period), WH.get("/api/people?period=" + period)]);
+  renderReport(o);
+  if (editing === null) renderPeople(p); else peopleData = p;
+}
 async function loadNet() { renderNet(await WH.get("/api/internet")); }
 
 async function loadAll() {
