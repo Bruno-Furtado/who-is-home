@@ -316,8 +316,8 @@ footer { margin-top: 34px; text-align: center; color: var(--faint); font-size: 1
 .title-chip { font-size: 12px; padding: 3px 9px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); white-space: nowrap; }
 .stack.thin { height: 8px; margin: 0; }
 .p-stats { display: grid; grid-template-columns: 1fr 1fr 1.35fr; gap: 6px; }
-.p-stats div { background: var(--surface-2); border-radius: 12px; padding: 8px 10px; min-width: 0; }
-.p-stats span { display: block; font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.p-stats div { background: var(--surface-2); border-radius: 12px; padding: 8px 9px; min-width: 0; }
+.p-stats span { display: block; font-size: 10.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .p-stats b { display: block; font-size: 15px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .p-apps { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .p-apps b { color: var(--text); font-weight: 600; }
